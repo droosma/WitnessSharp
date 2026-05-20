@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WitnessSharp.Analyzers/WitnessSharp.Analyzers.csproj" />
+    <Project Path="src/WitnessSharp.AzureMonitor/WitnessSharp.AzureMonitor.csproj" />
+    <Project Path="src/WitnessSharp.Testing/WitnessSharp.Testing.csproj" />
+    <Project Path="src/WitnessSharp/WitnessSharp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WitnessSharp.Analyzers.Tests/WitnessSharp.Analyzers.Tests.csproj" />
+    <Project Path="tests/WitnessSharp.AzureMonitor.Tests/WitnessSharp.AzureMonitor.Tests.csproj" />
+    <Project Path="tests/WitnessSharp.Testing.Tests/WitnessSharp.Testing.Tests.csproj" />
+    <Project Path="tests/WitnessSharp.Tests/WitnessSharp.Tests.csproj" />
+  </Folder>
+</Solution>

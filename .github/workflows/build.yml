@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # MinVer reads tags from history to compute versions; needs full clone.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore WitnessSharp.slnx
+
+      - name: Build
+        run: dotnet build WitnessSharp.slnx --no-restore --configuration Release
+
+      - name: Test net8.0
+        run: dotnet test WitnessSharp.slnx --no-build --no-restore --configuration Release --framework net8.0 --verbosity normal
+
+      - name: Test net10.0
+        run: dotnet test WitnessSharp.slnx --no-build --no-restore --configuration Release --framework net10.0 --verbosity normal

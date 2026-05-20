@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>Test doubles (TestWitness&lt;T&gt;) and assertion helpers for WitnessSharp.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WitnessSharp\WitnessSharp.csproj" />
+  </ItemGroup>
+
+</Project>

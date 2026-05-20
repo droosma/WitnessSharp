@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>Lean .NET observability primitives on OpenTelemetry: IWitness&lt;T&gt;, WitnessedAction, fluent bootstrap.</Description>
+  </PropertyGroup>
+
+</Project>
