@@ -12,7 +12,7 @@ public class WitnessedActionTests : IDisposable
         _listener = new ActivityListener
         {
             ShouldListenTo = s => s == _source,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            Sample = (ref _) => ActivitySamplingResult.AllDataAndRecorded,
         };
         ActivitySource.AddActivityListener(_listener);
     }
@@ -21,6 +21,7 @@ public class WitnessedActionTests : IDisposable
     {
         _listener.Dispose();
         _source.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private Activity StartTestActivity() =>
@@ -226,7 +227,7 @@ public class WitnessedActionTests : IDisposable
     {
         using var action = new WitnessedAction(activity: null);
 
-        var ex = Record.Exception(() => action.Finish());
+        var ex = Record.Exception(action.Finish);
 
         Assert.Null(ex);
     }
@@ -273,7 +274,7 @@ public class WitnessedActionTests : IDisposable
     {
         var action = new WitnessedAction(activity: null);
 
-        var ex = Record.Exception(() => action.Dispose());
+        var ex = Record.Exception(action.Dispose);
 
         Assert.Null(ex);
     }

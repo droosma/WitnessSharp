@@ -15,7 +15,7 @@ public class WitnessExtensionsTests : IDisposable
         _listener = new ActivityListener
         {
             ShouldListenTo = s => s == _source,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            Sample = (ref _) => ActivitySamplingResult.AllDataAndRecorded,
         };
         ActivitySource.AddActivityListener(_listener);
     }
@@ -25,6 +25,7 @@ public class WitnessExtensionsTests : IDisposable
         _listener.Dispose();
         _source.Dispose();
         _meter.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private sealed record Subject;
