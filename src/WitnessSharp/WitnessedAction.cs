@@ -20,15 +20,7 @@ public sealed class WitnessedAction : IDisposable
 
     public WitnessedAction AddEvent(string name, ActivityTagsCollection? tags = null)
     {
-        if (Activity is null)
-        {
-            return this;
-        }
-
-        var activityEvent = tags is null
-            ? new ActivityEvent(name)
-            : new ActivityEvent(name, tags: tags);
-        Activity.AddEvent(activityEvent);
+        Activity?.AddEvent(new ActivityEvent(name, tags: tags));
         return this;
     }
 

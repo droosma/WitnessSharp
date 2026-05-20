@@ -277,4 +277,16 @@ public class WitnessedActionTests : IDisposable
 
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void Dispose_disposes_the_activity()
+    {
+        var activity = StartTestActivity();
+        var action = new WitnessedAction(activity);
+
+        action.Dispose();
+
+        // Activity.Dispose() calls Stop() internally, which sets Duration > 0.
+        Assert.True(activity.Duration > TimeSpan.Zero);
+    }
 }

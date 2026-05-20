@@ -1,0 +1,20 @@
+{
+  "stryker-config": {
+    "project": "WitnessSharp.csproj",
+    "test-projects": [
+      "tests/WitnessSharp.Tests/WitnessSharp.Tests.csproj"
+    ],
+    "target-framework": "net10.0",
+    "reporters": [
+      "progress",
+      "html",
+      "cleartext",
+      "json"
+    ],
+    "thresholds": {
+      "high": 100,
+      "low": 100,
+      "break": 100
+    }
+  }
+}
