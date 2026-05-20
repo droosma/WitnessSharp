@@ -6,4 +6,8 @@
     <Description>Lean .NET observability primitives on OpenTelemetry: IWitness&lt;T&gt;, WitnessedAction, fluent bootstrap.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
 </Project>
