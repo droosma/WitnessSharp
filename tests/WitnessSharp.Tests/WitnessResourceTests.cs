@@ -20,7 +20,7 @@ public class WitnessResourceTests
         public void Dispose() => Environment.SetEnvironmentVariable(_key, _original);
     }
 
-    private static IReadOnlyDictionary<string, object> BuildAttributes(WitnessOptions options)
+    private static Dictionary<string, object> BuildAttributes(WitnessOptions options)
     {
         var builder = ResourceBuilder.CreateEmpty();
         WitnessResource.Apply(builder, options);
@@ -164,4 +164,4 @@ public class WitnessResourceTests
 }
 
 [CollectionDefinition("EnvVarMutating", DisableParallelization = true)]
-public class EnvVarMutatingCollection;
+public class EnvVarMutatingFixture;

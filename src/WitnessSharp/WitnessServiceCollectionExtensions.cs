@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -9,6 +10,9 @@ namespace Microsoft.Extensions.DependencyInjection;
 
 public static class WitnessServiceCollectionExtensions
 {
+    public static IWitnessBuilder AddWitness(this IServiceCollection services, IConfiguration section) =>
+        services.AddWitness(section.Bind);
+
     public static IWitnessBuilder AddWitness(this IServiceCollection services, Action<WitnessOptions> configure)
     {
         // Eagerly evaluate options so resource attributes can be composed at registration time.

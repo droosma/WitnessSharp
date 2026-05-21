@@ -142,4 +142,55 @@ public class WitnessServiceCollectionExtensionsTests
 
         Assert.Equal("FromAction", opts.Value.ServiceName);
     }
+
+    [Fact]
+    public void Resource_is_composed_from_options_for_TracerProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services
+            .AddWitness(opts =>
+            {
+                opts.ServiceName = "integration-svc";
+                opts.ServiceNamespace = "team";
+                opts.ServiceVersion = "1.0.0";
+                opts.ServiceInstanceId = "i-42";
+            })
+            // TracerProvider is only registered when WithTracing is wired up.
+            .ConfigureTracing(_ => { });
+        using var sp = services.BuildServiceProvider();
+
+        var tracer = sp.GetRequiredService<OpenTelemetry.Trace.TracerProvider>();
+        var attrs = ResourceProbe.ReadAttributes(tracer);
+
+        Assert.Equal("integration-svc", attrs["service.name"]);
+        Assert.Equal("team", attrs["service.namespace"]);
+        Assert.Equal("1.0.0", attrs["service.version"]);
+        Assert.Equal("i-42", attrs["service.instance.id"]);
+    }
+}
+
+/// <summary>
+/// OTel's <c>GetResource()</c> extension on <c>BaseProvider</c> is internal in
+/// the 1.x package family. We need a way to inspect the resource a provider
+/// was built with to verify the AddWitness pipeline end-to-end. Reflection is
+/// the cheapest workaround for a test-only concern.
+/// </summary>
+internal static class ResourceProbe
+{
+    public static Dictionary<string, object> ReadAttributes(OpenTelemetry.BaseProvider provider)
+    {
+        var method = typeof(OpenTelemetry.Sdk).Assembly
+            .GetTypes()
+            .SelectMany(t => t.GetMethods(
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Static))
+            .FirstOrDefault(m => m.Name == "GetResource"
+                && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == typeof(OpenTelemetry.BaseProvider))
+            ?? throw new InvalidOperationException("GetResource(BaseProvider) not found in OpenTelemetry assembly.");
+        var resource = (OpenTelemetry.Resources.Resource)method.Invoke(null, [provider])!;
+        return resource.Attributes.ToDictionary(a => a.Key, a => a.Value);
+    }
 }

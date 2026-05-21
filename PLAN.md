@@ -188,26 +188,27 @@ public interface IWitnessBuilder
 {
     IServiceCollection Services { get; }
 
-    // Instrumentation
-    IWitnessBuilder WithStandardInstrumentations();    // AspNetCore + HttpClient
-    IWitnessBuilder WithAspNetCoreInstrumentation(Action<AspNetCoreTraceInstrumentationOptions>? configure = null);
-    IWitnessBuilder WithHttpClientInstrumentation(Action<HttpClientTraceInstrumentationOptions>? configure = null);
-    IWitnessBuilder WithSqlClientInstrumentation(Action<SqlClientTraceInstrumentationOptions>? configure = null);
-    IWitnessBuilder WithEntityFrameworkCoreInstrumentation(Action<EntityFrameworkInstrumentationOptions>? configure = null);
-
-    // Exporters
-    IWitnessBuilder WithOtlpExporter(Action<OtlpExporterOptions>? configure = null);
-    IWitnessBuilder WithConsoleExporter();
-    // .WithAzureMonitor(...) is contributed by the WitnessSharp.AzureMonitor package.
-
     // Escape hatches — full access to the underlying OTel builders.
     IWitnessBuilder ConfigureTracing(Action<TracerProviderBuilder> configure);
     IWitnessBuilder ConfigureMetrics(Action<MeterProviderBuilder> configure);
     IWitnessBuilder ConfigureLogging(Action<OpenTelemetryLoggerOptions> configure);
-
-    // Opt-in: clear existing logging providers (off by default — see below).
-    IWitnessBuilder ClearLoggingProviders();
 }
+```
+
+Convenience methods live as **extension methods** on `IWitnessBuilder` so the interface stays minimal and sub-packages (`WitnessSharp.AzureMonitor`, future instrumentation packages) can contribute their own `WithX()` cleanly:
+
+```csharp
+// In src/WitnessSharp (WitnessBuilderExtensions)
+public static IWitnessBuilder WithStandardInstrumentations(this IWitnessBuilder builder);   // AspNet + Http
+public static IWitnessBuilder WithAspNetCoreInstrumentation(this IWitnessBuilder builder, Action<AspNetCoreTraceInstrumentationOptions>? configure = null);
+public static IWitnessBuilder WithHttpClientInstrumentation(this IWitnessBuilder builder, Action<HttpClientTraceInstrumentationOptions>? configure = null);
+public static IWitnessBuilder WithOtlpExporter(this IWitnessBuilder builder, Action<OtlpExporterOptions>? configure = null);
+public static IWitnessBuilder WithConsoleExporter(this IWitnessBuilder builder);
+public static IWitnessBuilder ClearLoggingProviders(this IWitnessBuilder builder);
+
+// SqlClient + EntityFrameworkCore instrumentations live in dedicated sub-packages
+// (see Future-work §4) so the core doesn't transitively depend on EFCore / SqlClient.
+// .WithAzureMonitor(...) is contributed by WitnessSharp.AzureMonitor.
 ```
 
 ### Resource attributes (auto)
@@ -360,6 +361,11 @@ Captured here so we don't lose context.
 3. **Custom processors package.**
    - *Context:* v1 ships no custom OTel processors. Consumers use OTel native filtering.
    - *Future:* if common filtering patterns emerge (health checks, fast SQL), a complementary `WitnessSharp.Processors` package can be added.
+
+4. **SqlClient / EntityFrameworkCore instrumentation sub-packages.**
+   - *Context:* the original PLAN listed `WithSqlClientInstrumentation` and `WithEntityFrameworkCoreInstrumentation` on the core fluent builder. Pulling those instrumentations into the core would force `Microsoft.Data.SqlClient` and `Microsoft.EntityFrameworkCore.Relational` as transitive dependencies on every consumer, conflicting with the hexagonal "core is lean" principle.
+   - *Decision (2026-05-20):* ship them as separate sub-packages (`WitnessSharp.Instrumentation.SqlClient`, `WitnessSharp.Instrumentation.EntityFrameworkCore`) when demand warrants. Each contributes its own `WithX()` extension on `IWitnessBuilder`.
+   - *Trigger:* a real consumer asks for them, or v1 of either OTel-contrib package goes stable.
 
 ---
 

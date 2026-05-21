@@ -8,11 +8,12 @@ internal static class WitnessResource
     {
         if (!string.IsNullOrEmpty(options.ServiceName))
         {
+            // ServiceInstanceId always has a value (option or MachineName fallback),
+            // so OTel's autoGenerate path is unreachable; no need to opt out of it.
             builder.AddService(
                 serviceName: options.ServiceName,
                 serviceNamespace: options.ServiceNamespace,
                 serviceVersion: options.ServiceVersion,
-                autoGenerateServiceInstanceId: false,
                 serviceInstanceId: options.ServiceInstanceId ?? Environment.MachineName);
         }
 
@@ -25,10 +26,9 @@ internal static class WitnessResource
             });
         }
 
-        if (options.AdditionalResourceAttributes.Count > 0)
-        {
-            builder.AddAttributes(options.AdditionalResourceAttributes);
-        }
+        // Unconditionally pass through — AddAttributes on an empty enumerable is a no-op,
+        // and the guard would be an unobservable optimization that mutation testing can't kill.
+        builder.AddAttributes(options.AdditionalResourceAttributes);
     }
 
     private static string? ResolveDeploymentEnvironment(WitnessOptions options) =>
