@@ -24,6 +24,10 @@
     <IsTestProject>false</IsTestProject>
   </PropertyGroup>
 
+  <PropertyGroup Label="Versioning">
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
   <PropertyGroup Label="PackageMetadata">
     <Authors>Duncan Roosma</Authors>
     <Company>WitnessSharp contributors</Company>
