@@ -6,7 +6,9 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <DevelopmentDependency>true</DevelopmentDependency>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <!-- RS1038: code fix + analyzer in same assembly is acceptable for small packages.
+         RS2008: release tracking deferred until v1. -->
+    <NoWarn>$(NoWarn);NU5128;RS1038;RS2008</NoWarn>
     <Description>Roslyn analyzers and source-generator interceptor for WitnessSharp (WS0001 + transparent [LoggerMessage] optimization).</Description>
   </PropertyGroup>
 

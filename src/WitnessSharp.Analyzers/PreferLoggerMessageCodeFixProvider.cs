@@ -19,6 +19,7 @@ namespace WitnessSharp.Analyzers;
 public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
 {
     private const string Title = "Convert to [LoggerMessage] pattern";
+    private static readonly char[] PlaceholderDelimiters = { ',', ':' };
 
     public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("WS0001");
 
@@ -391,7 +392,7 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
                 token = token.Substring(1);
             }
 
-            var delimiterIndex = token.IndexOfAny(new[] { ',', ':' });
+            var delimiterIndex = token.IndexOfAny(PlaceholderDelimiters);
             if (delimiterIndex >= 0)
             {
                 token = token.Substring(0, delimiterIndex);
@@ -408,7 +409,7 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
         return placeholders;
     }
 
-    private static string CreateParameterName(ExpressionSyntax expression, string placeholderName, ISet<string> usedNames, int index)
+    private static string CreateParameterName(ExpressionSyntax expression, string placeholderName, HashSet<string> usedNames, int index)
     {
         var baseName = expression is IdentifierNameSyntax identifier
             ? SanitizeIdentifier(identifier.Identifier.ValueText)

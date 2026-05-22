@@ -20,10 +20,10 @@ internal static class WitnessResource
         var deploymentEnvironment = ResolveDeploymentEnvironment(options);
         if (!string.IsNullOrEmpty(deploymentEnvironment))
         {
-            builder.AddAttributes(new[]
-            {
+            builder.AddAttributes(
+            [
                 new KeyValuePair<string, object>("deployment.environment", deploymentEnvironment),
-            });
+            ]);
         }
 
         // Unconditionally pass through — AddAttributes on an empty enumerable is a no-op,

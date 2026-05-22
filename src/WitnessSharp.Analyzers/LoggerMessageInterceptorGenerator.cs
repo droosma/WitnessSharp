@@ -18,6 +18,8 @@ public sealed class LoggerMessageInterceptorGenerator : IIncrementalGenerator
 {
     private const string GeneratedNamespace = "WitnessSharp.Generated";
     private const string GeneratedClassName = "LoggerMessageInterceptors";
+    private static readonly char[] PlaceholderDelimiters = { ',', ':' };
+    private static readonly char[] NamespaceSeparators = { ';' };
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -26,14 +28,14 @@ public sealed class LoggerMessageInterceptorGenerator : IIncrementalGenerator
                 static (node, _) => node is MethodDeclarationSyntax method && method.ParameterList.Parameters.Count > 0,
                 static (syntaxContext, cancellationToken) => TryCreateCandidate(syntaxContext, cancellationToken, out var candidate) ? candidate : null)
             .Where(static candidate => candidate.HasValue)
-            .Select(static (candidate, _) => candidate.Value);
+            .Select(static (candidate, _) => candidate!.Value);
 
         var callSites = context.SyntaxProvider
             .CreateSyntaxProvider<InterceptedCallSite?>(
                 static (node, _) => node is InvocationExpressionSyntax,
                 static (syntaxContext, cancellationToken) => TryCreateCallSite(syntaxContext, cancellationToken, out var callSite) ? callSite : null)
             .Where(static callSite => callSite.HasValue)
-            .Select(static (callSite, _) => callSite.Value);
+            .Select(static (callSite, _) => callSite!.Value);
 
         var generatorOptions = context.AnalyzerConfigOptionsProvider
             .Select(static (provider, _) => GeneratorOptions.Create(provider));
@@ -653,7 +655,7 @@ public sealed class LoggerMessageInterceptorGenerator : IIncrementalGenerator
                 token = token.Substring(1);
             }
 
-            var delimiterIndex = token.IndexOfAny(new[] { ',', ':' });
+            var delimiterIndex = token.IndexOfAny(PlaceholderDelimiters);
             if (delimiterIndex >= 0)
             {
                 token = token.Substring(0, delimiterIndex);
@@ -779,7 +781,7 @@ public sealed class LoggerMessageInterceptorGenerator : IIncrementalGenerator
 
         public bool IsInterceptorNamespaceEnabled(string ns) =>
             InterceptorNamespaces
-                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(NamespaceSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Any(value => string.Equals(value.Trim(), ns, StringComparison.Ordinal));
 
         private bool TryGetTargetFrameworkMajorVersion(out int majorVersion)

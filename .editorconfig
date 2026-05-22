@@ -20,8 +20,9 @@ indent_size = 2
 indent_size = 4
 
 [*.cs]
-# Code style severity defaults
-dotnet_analyzer_diagnostic.category-Style.severity = warning
+# Code style severity — suggestion by default so TreatWarningsAsErrors in CI
+# doesn't fail the build on style preferences. Promote individual rules as needed.
+dotnet_analyzer_diagnostic.category-Style.severity = suggestion
 
 # var
 csharp_style_var_for_built_in_types = true:suggestion
@@ -73,3 +74,7 @@ dotnet_naming_style.underscore_camel.capitalization = camel_case
 # CA1051 (avoid public instance fields) — suppressed for WitnessedAction.Activity
 # by design (see PLAN.md "Notes on intentional non-changes").
 dotnet_diagnostic.CA1051.severity = none
+
+# IDE0058 (expression value is never used) — fluent builder patterns intentionally
+# discard return values when chaining on the same instance.
+dotnet_diagnostic.IDE0058.severity = suggestion
