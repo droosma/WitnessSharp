@@ -1,8 +1,8 @@
 # WitnessSharp
 
 [![NuGet version](https://img.shields.io/nuget/v/WitnessSharp.svg)](https://www.nuget.org/packages/WitnessSharp)
-[![Build status](https://img.shields.io/github/actions/workflow/status/witnesssharp/witnesssharp/build.yml?branch=main)](https://github.com/witnesssharp/witnesssharp/actions)
-[![License](https://img.shields.io/github/license/witnesssharp/witnesssharp)](LICENSE)
+[![Build status](https://img.shields.io/github/actions/workflow/status/droosma/WitnessSharp/build.yml?branch=main)](https://github.com/droosma/WitnessSharp/actions)
+[![License](https://img.shields.io/github/license/droosma/WitnessSharp)](LICENSE)
 
 Lean .NET observability on OpenTelemetry. `IWitness<T>` gives each call site one place for logs, metrics, and traces.
 
