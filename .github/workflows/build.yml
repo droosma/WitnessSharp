@@ -80,7 +80,7 @@ jobs:
               data = json.load(f)
           files = data.get('files', {})
           total_detected = sum(1 for f in files.values() for m in f.get('mutants', []) if m['status'] in ('Killed', 'Timeout'))
-          total_mutants = sum(len(f.get('mutants', [])) for f in files.values())
+          total_mutants = sum(1 for f in files.values() for m in f.get('mutants', []) if m['status'] not in ('Ignored', 'CompileError'))
           score = (total_detected / total_mutants * 100) if total_mutants > 0 else 100
           print(f'{score:.1f}')
           ")
