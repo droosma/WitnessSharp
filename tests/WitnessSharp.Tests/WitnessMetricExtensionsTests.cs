@@ -18,8 +18,8 @@ public class WitnessMetricExtensionsTests : IDisposable
 
     private sealed record Subject;
 
-    private IWitness<Subject> CreateWitness() =>
-        new Witness<Subject>(_meter, _source, NullLogger<Subject>.Instance);
+    private Witness<Subject> CreateWitness() =>
+        new(_meter, _source, NullLogger<Subject>.Instance);
 
     [Fact]
     public void Counter_returns_counter_from_witness_meter()
