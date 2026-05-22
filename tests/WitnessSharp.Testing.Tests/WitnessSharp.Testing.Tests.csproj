@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\WitnessSharp.Testing\WitnessSharp.Testing.csproj" />
+    <ProjectReference Include="..\..\src\WitnessSharp\WitnessSharp.csproj" />
   </ItemGroup>
 
 </Project>

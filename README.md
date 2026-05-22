@@ -1,46 +1,439 @@
 # WitnessSharp
 
-A lean, opinionated .NET observability package built on OpenTelemetry.
+[![NuGet version](https://img.shields.io/nuget/v/WitnessSharp.svg)](https://www.nuget.org/packages/WitnessSharp)
+[![Build status](https://img.shields.io/github/actions/workflow/status/witnesssharp/witnesssharp/build.yml?branch=main)](https://github.com/witnesssharp/witnesssharp/actions)
+[![License](https://img.shields.io/github/license/witnesssharp/witnesssharp)](LICENSE)
 
-> **Status:** pre-alpha. Public API is in flux. Do not depend on this yet.
+Lean .NET observability on OpenTelemetry. `IWitness<T>` gives each call site one place for logs, metrics, and traces.
 
-## What you get
+WitnessSharp keeps the underlying .NET types visible. You still work with `ILogger<T>`, `Meter`, `ActivitySource`, configuration binding, and OpenTelemetry exporters. The package just gives them a clean shape and a small bootstrap API.
 
-- **`IWitness<T>`** — one central injectable per call site, bundling `ILogger<T>`, `Meter`, and `ActivitySource`.
-- **`WitnessedAction`** — a disposable primitive that manages an `Activity`'s lifecycle with explicit success / failure / cancellation semantics.
-- **Fluent bootstrap** — `services.AddWitness(...)` registers DI primitives and resource attributes; instrumentations, exporters, and filters are opt-in via the builder.
-- **Roslyn analyzer (opt-in install)** — nudges your `IWitness<T>` extension methods toward `[LoggerMessage]` for allocation-free structured logging.
+Supports `net8.0` and `net10.0`.
 
-## Packages
-
-| Package | Role |
-| --- | --- |
-| `WitnessSharp` | Core primitives, options, fluent builder, DI extensions. |
-| `WitnessSharp.AzureMonitor` | Optional Azure Monitor exporter glue (`.WithAzureMonitor()`). |
-| `WitnessSharp.Analyzers` | Roslyn analyzers + `[LoggerMessage]` interceptor. |
-| `WitnessSharp.Testing` | `TestWitness<T>` and assertion helpers for unit tests. |
-
-## Quickstart
-
-> _Coming with the first preview release. See [`PLAN.md`](PLAN.md) for the v1 spec._
+## 30-second quickstart
 
 ```csharp
-// dotnet add package WitnessSharp
+// Program.cs
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
+    .WithStandardInstrumentations()
+    .WithOtlpExporter();
 
-services.AddWitness(cfg => cfg.ServiceName = "my-api")
-        .WithStandardInstrumentations()
-        .WithOtlpExporter();
-
-public class HomeController(IWitness<HomeController> witness) { … }
+// In your service
+public sealed class OrderService(IWitness<OrderService> witness)
+{
+    public void PlaceOrder(int orderId)
+    {
+        using var action = witness.StartAction("PlaceOrder");
+        action.SetTag("order.id", orderId);
+        // business logic
+    }
+}
 ```
 
-## Design principles
+`AddWitness()` binds `WitnessOptions` from the `"Witness"` section. Registration without any `.With*()` calls is valid if you only want the core primitives.
 
-1. **Open for extension, closed for modification.** Sensible defaults that compose, never replace.
-2. **Don't re-abstract things .NET already does well.** `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` stay canonical.
-3. **Lean defaults, fluent opt-in.** Opinionated about *shape*, not about *what's pre-enabled*.
-4. **One central injectable per call site.**
+## Concepts
+
+### `IWitness<T>`
+
+`IWitness<T>` is the main thing you inject. It bundles:
+
+- `ILogger<T>` for logs
+- `Meter` for metrics
+- `ActivitySource` for traces
+
+That shape keeps constructors short and keeps related observability tools together. It also avoids inventing new logging or metrics abstractions. If you already know the built-in .NET types, you already know most of WitnessSharp.
+
+Most classes only need `IWitness<T>`. If you need a typed witness for a type discovered at runtime, inject `IWitnessFactory` and call `Create<T>()`.
+
+### `WitnessedAction`
+
+`WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
+
+Outcomes are explicit:
+
+- success is the default
+- `Failed(Exception)` or `Failed(string)` marks the action as a failure
+- `Cancelled()` marks it as cancelled
+
+`Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
+
+### Logging via extension methods
+
+WitnessSharp leans toward extension methods on `IWitness<T>` for recurring log messages. That keeps message templates in one place and keeps call sites small.
+
+```csharp
+public static class OrderServiceWitnessExtensions
+{
+    public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
+        witness.Logger.LogInformation("Order {OrderId} placed", orderId);
+}
+```
+
+The optional analyzer package spots these patterns and nudges you toward `LoggerMessage` where it pays off.
+
+### Design philosophy
+
+- Lean defaults. Nothing is enabled unless you opt in.
+- Fluent setup. Start with `AddWitness()`, then add instrumentations and exporters you actually want.
+- Native .NET first. WitnessSharp does not hide `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, or OpenTelemetry builders.
+- One injectable per call site. Logs, metrics, and traces stay together.
+
+## Installation
+
+```bash
+dotnet add package WitnessSharp
+dotnet add package WitnessSharp.AzureMonitor  # optional
+dotnet add package WitnessSharp.Analyzers     # optional
+dotnet add package WitnessSharp.Testing       # test projects
+```
+
+## Configuration reference
+
+You can configure WitnessSharp with either overload:
+
+```csharp
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"));
+
+// or
+builder.Services.AddWitness(options =>
+{
+    options.ServiceName = "orders-api";
+});
+```
+
+### `appsettings.json`
+
+```json
+{
+  "Witness": {
+    "ServiceName": "orders-api",
+    "ServiceNamespace": "Contoso.Commerce",
+    "ServiceVersion": "1.3.0",
+    "ServiceInstanceId": "orders-api-01",
+    "DeploymentEnvironment": "Production",
+    "AdditionalResourceAttributes": {
+      "service.owner": "checkout",
+      "cloud.region": "westeurope",
+      "deployment.ring": "blue"
+    }
+  }
+}
+```
+
+### `WitnessOptions`
+
+| Property | Description | Default |
+| --- | --- | --- |
+| `ServiceName` | Sets `service.name`. This is the main identity of your service. | Empty string. Set this in real apps. |
+| `ServiceNamespace` | Sets `service.namespace`. Useful when several services share the same base name. | `null` |
+| `ServiceVersion` | Sets `service.version`. | `null` |
+| `ServiceInstanceId` | Sets `service.instance.id`. | `Environment.MachineName` |
+| `DeploymentEnvironment` | Sets `deployment.environment`. | `DOTNET_ENVIRONMENT`, then `ASPNETCORE_ENVIRONMENT` |
+| `AdditionalResourceAttributes` | Adds any extra resource attributes you want on logs, metrics, and traces. | Empty dictionary |
+
+### Fluent builder methods
+
+Registration by itself is valid. Add builder methods when you want instrumentations or exporters.
+
+| Method | What it does | Notes |
+| --- | --- | --- |
+| `WithStandardInstrumentations()` | Adds ASP.NET Core and `HttpClient` tracing instrumentation. | Good default for web apps. |
+| `WithAspNetCoreInstrumentation(...)` | Adds ASP.NET Core tracing instrumentation. | Use the overload when you need request filtering or enrichment. |
+| `WithHttpClientInstrumentation(...)` | Adds `HttpClient` tracing instrumentation. | Useful for outbound calls from services or APIs. |
+| `WithOtlpExporter(...)` | Adds OTLP exporters for traces, metrics, and logs. | Good fit for OpenTelemetry Collector, Jaeger, Tempo, and similar backends. |
+| `WithConsoleExporter()` | Adds console exporters for traces, metrics, and logs. | Handy for local debugging. |
+| `WithAzureMonitor(...)` | Adds Azure Monitor exporters for traces, metrics, and logs. | Comes from `WitnessSharp.AzureMonitor`. |
+| `ClearLoggingProviders()` | Clears existing `Microsoft.Extensions.Logging` providers before OpenTelemetry logging is added. | Opt in only if you want OTel to be the only logging provider. |
+
+### Escape hatches
+
+Use the escape hatches when the built-in convenience methods are not enough:
+
+| Method | Use it for |
+| --- | --- |
+| `ConfigureTracing(Action<TracerProviderBuilder>)` | Custom sources, filters, processors, samplers, or exporter pipelines |
+| `ConfigureMetrics(Action<MeterProviderBuilder>)` | Custom meters, views, readers, or exporters |
+| `ConfigureLogging(Action<OpenTelemetryLoggerOptions>)` | OpenTelemetry logging options and exporters |
+
+If you configure an instrumentation manually through `ConfigureTracing`, skip the matching convenience method to avoid registering the same instrumentation twice.
+
+## Recipes
+
+WitnessSharp does not ship hard-coded health-check or SQL filters. Those choices depend on your app. Use the escape hatches and keep the policy in your service code.
+
+<details>
+<summary>Filter out health-check spans</summary>
+
+Use `ConfigureTracing()` when you need to own the ASP.NET Core instrumentation options.
+
+```csharp
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
+    .ConfigureTracing(tracing =>
+    {
+        tracing.AddAspNetCoreInstrumentation(options =>
+        {
+            options.Filter = httpContext =>
+                !httpContext.Request.Path.StartsWithSegments("/health") &&
+                !httpContext.Request.Path.StartsWithSegments("/ready");
+        });
+
+        tracing.AddHttpClientInstrumentation();
+    })
+    .WithOtlpExporter();
+```
+
+This pattern is a good fit when `WithStandardInstrumentations()` is almost right, but you need a request filter.
+
+</details>
+
+<details>
+<summary>Filter fast SQL spans with a custom processor</summary>
+
+Duration-based SQL filtering is app-specific, so WitnessSharp leaves it to your tracing pipeline. This example keeps SQL spans that run for at least 100 ms and exports everything else as usual.
+
+This recipe assumes you have also installed the SQL client instrumentation package from the OpenTelemetry ecosystem.
+
+```csharp
+using System.Diagnostics;
+using System.Linq;
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Trace;
+
+public sealed class MinimumDurationSqlProcessor : BaseProcessor<Activity>
+{
+    private readonly BatchActivityExportProcessor _inner;
+    private readonly TimeSpan _minimumDuration;
+
+    public MinimumDurationSqlProcessor(BaseExporter<Activity> exporter, TimeSpan minimumDuration)
+    {
+        _inner = new BatchActivityExportProcessor(exporter);
+        _minimumDuration = minimumDuration;
+    }
+
+    public override void OnEnd(Activity data)
+    {
+        var isSqlSpan = data.Kind == ActivityKind.Client &&
+            data.Tags.Any(tag => tag.Key == "db.system");
+
+        if (!isSqlSpan || data.Duration >= _minimumDuration)
+        {
+            _inner.OnEnd(data);
+        }
+    }
+
+    protected override bool OnForceFlush(int timeoutMilliseconds) =>
+        _inner.ForceFlush(timeoutMilliseconds);
+
+    protected override bool OnShutdown(int timeoutMilliseconds) =>
+        _inner.Shutdown(timeoutMilliseconds);
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _inner.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+}
+```
+
+```csharp
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
+    .ConfigureTracing(tracing =>
+    {
+        tracing.AddSqlClientInstrumentation();
+        tracing.AddProcessor(new MinimumDurationSqlProcessor(
+            new OtlpTraceExporter(new OtlpExporterOptions
+            {
+                Endpoint = new Uri("http://localhost:4317")
+            }),
+            TimeSpan.FromMilliseconds(100)));
+    })
+    .ConfigureMetrics(metrics => metrics.AddOtlpExporter())
+    .ConfigureLogging(logging => logging.AddOtlpExporter());
+```
+
+Do not combine this trace setup with `.WithOtlpExporter()`, or you will export traces twice.
+
+</details>
+
+<details>
+<summary>Send all three signals to Azure Monitor</summary>
+
+Install `WitnessSharp.AzureMonitor`, then add the Azure Monitor exporters with one call.
+
+```csharp
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
+    .WithStandardInstrumentations()
+    .WithAzureMonitor(options =>
+    {
+        options.ConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+    });
+```
+
+If your environment already sets `APPLICATIONINSIGHTS_CONNECTION_STRING`, the parameterless `.WithAzureMonitor()` overload also works.
+
+See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for Azure-specific options and guidance.
+
+</details>
+
+<details>
+<summary>Add custom resource attributes</summary>
+
+You can add shared metadata once and have it show up on logs, metrics, and traces.
+
+```json
+{
+  "Witness": {
+    "ServiceName": "orders-api",
+    "AdditionalResourceAttributes": {
+      "service.owner": "checkout",
+      "cloud.region": "westeurope",
+      "deployment.ring": "blue"
+    }
+  }
+}
+```
+
+You can do the same in code if you prefer:
+
+```csharp
+builder.Services.AddWitness(options =>
+{
+    options.ServiceName = "orders-api";
+    options.AdditionalResourceAttributes["service.owner"] = "checkout";
+    options.AdditionalResourceAttributes["cloud.region"] = "westeurope";
+    options.AdditionalResourceAttributes["deployment.ring"] = "blue";
+});
+```
+
+</details>
+
+## Testing
+
+`WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records:
+
+- logged messages
+- recorded metrics
+- started activities
+
+It also ships assertion helpers:
+
+- `AssertLogged(...)`
+- `AssertActivityStarted(...)`
+- `AssertMetricRecorded(...)`
+
+Example:
+
+```csharp
+using Microsoft.Extensions.Logging;
+using WitnessSharp.Testing;
+
+public class OrderServiceTests
+{
+    [Fact]
+    public void PlaceOrder_emits_expected_telemetry()
+    {
+        using var witness = new TestWitness<OrderService>();
+        var counter = witness.Meter.CreateCounter<int>("orders");
+
+        witness.Logger.LogInformation("Placed order 42");
+        counter.Add(1);
+
+        using (witness.StartAction("PlaceOrder"))
+        {
+        }
+
+        witness.AssertLogged(LogLevel.Information, "Placed order");
+        witness.AssertMetricRecorded("orders");
+        witness.AssertActivityStarted("PlaceOrder");
+    }
+}
+```
+
+## Analyzer (`WS0001`)
+
+`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. Its first rule, `WS0001`, flags `witness.Logger.LogInformation(...)`, `witness.Logger.LogWarning(...)`, and `witness.Logger.Log(LogLevel, ...)` calls inside `IWitness` or `IWitness<T>` extension methods such as:
+
+```csharp
+public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
+    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
+```
+
+That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
+
+### Install the analyzer
+
+```bash
+dotnet add package WitnessSharp.Analyzers
+```
+
+### Configure severity in `.editorconfig`
+
+```ini
+dotnet_diagnostic.WS0001.severity = warning
+```
+
+### The `LoggerMessage` pattern it promotes
+
+```csharp
+public static partial class OrderLogs
+{
+    [LoggerMessage(
+        EventId = 1001,
+        Level = LogLevel.Information,
+        Message = "Order {OrderId} placed")]
+    public static partial void OrderPlaced(this ILogger logger, int orderId);
+}
+
+public static class OrderServiceWitnessExtensions
+{
+    public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
+        witness.Logger.OrderPlaced(orderId);
+}
+```
+
+For background on source-generated logging, see the official [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+
+## AOT support
+
+WitnessSharp is designed to stay friendly to trimming and native AOT.
+
+A few practical notes:
+
+- The core package keeps to standard .NET and OpenTelemetry APIs instead of runtime-heavy abstractions.
+- Your final AOT story still depends on the instrumentations and exporters you enable.
+- When you publish with `PublishAot=true`, watch for warnings from upstream OpenTelemetry or exporter packages and treat them seriously.
+
+## Package family
+
+| Package | Purpose |
+| --- | --- |
+| `WitnessSharp` | Core primitives, DI registration, `IWitness<T>`, `WitnessedAction`, options, and fluent builder extensions |
+| `WitnessSharp.AzureMonitor` | Azure Monitor exporter wiring via `.WithAzureMonitor()` |
+| `WitnessSharp.Analyzers` | Roslyn analyzer package with `WS0001` |
+| `WitnessSharp.Testing` | `TestWitness<T>` and assertion helpers for test projects |
+
+## Contributing
+
+Contributions are welcome. If you want to help:
+
+1. Build the solution with `dotnet build WitnessSharp.slnx`
+2. Run the test suite with `dotnet test WitnessSharp.slnx`
+3. Open a pull request with a clear description of the change
+
+If a future `CONTRIBUTING.md` appears, follow that file first.
 
 ## License
 
-[MIT](LICENSE).
+MIT. See [LICENSE](LICENSE).
+
+## Further reading
+
+- [OpenTelemetry for .NET](https://opentelemetry.io/docs/languages/dotnet/)
+- [Azure Monitor OpenTelemetry exporter](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme)
+- [High-performance logging with `LoggerMessage`](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator)

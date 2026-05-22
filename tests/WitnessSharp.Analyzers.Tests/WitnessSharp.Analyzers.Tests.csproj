@@ -9,4 +9,10 @@
     <ProjectReference Include="..\..\src\WitnessSharp.Analyzers\WitnessSharp.Analyzers.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Testing.Verifiers.XUnit" />
+  </ItemGroup>
+
 </Project>

@@ -10,4 +10,8 @@
     <ProjectReference Include="..\WitnessSharp\WitnessSharp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+  </ItemGroup>
+
 </Project>
