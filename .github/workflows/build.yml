@@ -10,14 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
       - run: dotnet restore WitnessSharp.slnx
       - run: dotnet build WitnessSharp.slnx --no-restore -c Release
       - run: dotnet test WitnessSharp.slnx --no-build -c Release --logger "trx;LogFileName=results.trx"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
@@ -28,14 +28,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # MinVer needs full history
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
       - run: dotnet pack WitnessSharp.slnx -c Release -o ./artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: ./artifacts/*.nupkg
@@ -43,9 +43,8 @@ jobs:
   aot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
       - run: dotnet publish samples/SampleWebApi/SampleWebApi.csproj -c Release -r linux-x64 /p:PublishAot=true
-        # Treat AOT warnings from OUR code as errors; upstream OTel warnings documented but allowed
