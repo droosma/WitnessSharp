@@ -60,8 +60,8 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
-      - name: Install Stryker
-        run: dotnet tool install -g dotnet-stryker
+      - name: Restore tools
+        run: dotnet tool restore
       - name: Run Stryker
         run: dotnet stryker --config-file stryker-config.json
       - name: Upload Stryker report
