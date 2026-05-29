@@ -42,6 +42,9 @@ public static class WitnessServiceCollectionExtensions
     /// </remarks>
     public static IWitnessBuilder AddWitness(this IServiceCollection services, Action<WitnessOptions> configure)
     {
+        // Stryker disable once Statement : explicit fail-fast guard. Removing it is an equivalent mutant
+        // because the first downstream use (services.Configure below) throws an identical
+        // ArgumentNullException with the same "services" parameter name.
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
 
@@ -74,6 +77,9 @@ public static class WitnessServiceCollectionExtensions
     {
         if (string.IsNullOrEmpty(options.ServiceName))
         {
+            // Stryker disable once String : the "unknown_service" fallback is only reached when
+            // Assembly.GetEntryAssembly() is null, which never happens under a managed test host,
+            // so mutating the literal produces an equivalent (unkillable) mutant.
             options.ServiceName = Assembly.GetEntryAssembly()?.GetName().Name ?? "unknown_service";
         }
     }

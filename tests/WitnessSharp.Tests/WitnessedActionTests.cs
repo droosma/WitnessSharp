@@ -243,6 +243,7 @@ public class WitnessedActionTests : IDisposable
         action.Dispose();
 
         Assert.Equal(ActivityStatusCode.Ok, activity.Status);
+        Assert.DoesNotContain(activity.TagObjects, t => t.Key == WitnessedAction.OutcomeTagName);
     }
 
     [Fact]
@@ -255,6 +256,7 @@ public class WitnessedActionTests : IDisposable
         action.Dispose();
 
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.Contains(activity.TagObjects, t => t.Key == WitnessedAction.OutcomeTagName && Equals(t.Value, "Failure"));
     }
 
     [Fact]
@@ -267,6 +269,7 @@ public class WitnessedActionTests : IDisposable
         action.Dispose();
 
         Assert.Equal(ActivityStatusCode.Ok, activity.Status);
+        Assert.Contains(activity.TagObjects, t => t.Key == WitnessedAction.OutcomeTagName && Equals(t.Value, "Cancelled"));
     }
 
     [Fact]

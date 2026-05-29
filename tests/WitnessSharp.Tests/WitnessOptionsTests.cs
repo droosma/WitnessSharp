@@ -39,4 +39,40 @@ public class WitnessOptionsTests
 
         Assert.Equal("eu-west-1", options.AdditionalResourceAttributes["host.region"]);
     }
+
+    [Fact]
+    public void CopyTo_copies_all_scalar_fields()
+    {
+        var source = new WitnessOptions
+        {
+            ServiceName = "svc",
+            ServiceNamespace = "ns",
+            ServiceVersion = "1.2.3",
+            ServiceInstanceId = "i-1",
+            DeploymentEnvironment = "prod",
+        };
+        var target = new WitnessOptions();
+
+        source.CopyTo(target);
+
+        Assert.Equal("svc", target.ServiceName);
+        Assert.Equal("ns", target.ServiceNamespace);
+        Assert.Equal("1.2.3", target.ServiceVersion);
+        Assert.Equal("i-1", target.ServiceInstanceId);
+        Assert.Equal("prod", target.DeploymentEnvironment);
+    }
+
+    [Fact]
+    public void CopyTo_replaces_existing_target_resource_attributes()
+    {
+        var source = new WitnessOptions();
+        source.AdditionalResourceAttributes["host.region"] = "eu-west-1";
+        var target = new WitnessOptions();
+        target.AdditionalResourceAttributes["stale.key"] = "stale.value";
+
+        source.CopyTo(target);
+
+        Assert.False(target.AdditionalResourceAttributes.ContainsKey("stale.key"));
+        Assert.Equal("eu-west-1", target.AdditionalResourceAttributes["host.region"]);
+    }
 }

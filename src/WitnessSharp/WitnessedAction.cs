@@ -8,6 +8,8 @@ namespace WitnessSharp;
 /// </summary>
 public sealed class WitnessedAction : IDisposable
 {
+    internal const string OutcomeTagName = "witness.outcome";
+
     /// <summary>Gets the underlying activity, or <see langword="null"/> when no listener was sampling.</summary>
     public Activity? Activity { get; }
 
@@ -80,16 +82,21 @@ public sealed class WitnessedAction : IDisposable
     /// <summary>
     /// Finalizes the activity status and disposes it. A <see cref="WitnessedOutcome.Failure"/> maps to
     /// <see cref="ActivityStatusCode.Error"/>; all other outcomes map to <see cref="ActivityStatusCode.Ok"/>.
-    /// The outcome name is recorded as the status description for non-success outcomes so that a
-    /// cancelled operation remains distinguishable from a successful one.
+    /// For non-success outcomes the outcome name is also recorded as the <c>witness.outcome</c> tag, so a
+    /// cancelled operation remains distinguishable from a successful one (the activity status description is
+    /// only retained for the <see cref="ActivityStatusCode.Error"/> code and would otherwise be lost).
     /// </summary>
     public void Dispose()
     {
         var status = Outcome == WitnessedOutcome.Failure
             ? ActivityStatusCode.Error
             : ActivityStatusCode.Ok;
-        var description = Outcome == WitnessedOutcome.Success ? null : Outcome.ToString();
-        Activity?.SetStatus(status, description);
+        if (Outcome != WitnessedOutcome.Success)
+        {
+            Activity?.SetTag(OutcomeTagName, Outcome.ToString());
+        }
+
+        Activity?.SetStatus(status);
         Activity?.Dispose();
     }
 

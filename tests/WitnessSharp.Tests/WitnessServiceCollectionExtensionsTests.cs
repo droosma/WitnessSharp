@@ -18,6 +18,34 @@ public class WitnessServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddWitness_throws_when_services_is_null()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            ((IServiceCollection)null!).AddWitness(_ => { }));
+    }
+
+    [Fact]
+    public void AddWitness_throws_when_configure_is_null()
+    {
+        var services = new ServiceCollection();
+
+        Assert.Throws<ArgumentNullException>(() =>
+            services.AddWitness((Action<WitnessOptions>)null!));
+    }
+
+    [Fact]
+    public void Empty_ServiceName_falls_back_to_entry_assembly_name()
+    {
+        var expected = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "unknown_service";
+        using var sp = Build(opts => opts.ServiceName = string.Empty);
+
+        var meter = sp.GetRequiredService<Meter>();
+
+        Assert.False(string.IsNullOrEmpty(meter.Name));
+        Assert.Equal(expected, meter.Name);
+    }
+
+    [Fact]
     public void AddWitness_returns_a_WitnessBuilder()
     {
         var services = new ServiceCollection();
