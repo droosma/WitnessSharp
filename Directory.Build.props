@@ -6,10 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <!-- Enable XML doc generation so Roslyn can run IDE0005 at build.
-         CS1591 (missing XML docs) is suppressed until milestone 10. -->
+    <!-- Enable XML doc generation so Roslyn can run IDE0005 at build, and so packable
+         projects ship IntelliSense documentation. CS1591 (missing XML docs) is enforced
+         on packable projects; it is suppressed for tests/samples in Directory.Build.targets. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Label="BuildHygiene">

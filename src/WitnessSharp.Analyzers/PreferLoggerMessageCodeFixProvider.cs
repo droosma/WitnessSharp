@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -15,16 +14,22 @@ using Microsoft.CodeAnalysis.Formatting;
 
 namespace WitnessSharp.Analyzers;
 
+/// <summary>
+/// Provides a code fix for <c>WS0001</c> that converts ad-hoc <c>ILogger</c>
+/// calls into the high-performance <c>[LoggerMessage]</c> source-generated pattern.
+/// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(PreferLoggerMessageCodeFixProvider)), Shared]
 public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
 {
     private const string Title = "Convert to [LoggerMessage] pattern";
-    private static readonly char[] PlaceholderDelimiters = { ',', ':' };
 
+    /// <inheritdoc/>
     public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create("WS0001");
 
+    /// <inheritdoc/>
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
+    /// <inheritdoc/>
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
@@ -109,19 +114,19 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
         }
 
         var arguments = invocation.ArgumentList.Arguments;
-        if (!TryGetLogLevelExpression(semanticModel, methodSymbol, arguments, cancellationToken, out var logLevelExpression, out var searchStartIndex))
+        if (!LoggerAnalysisHelpers.TryGetLogLevelExpression(semanticModel, methodSymbol, arguments, cancellationToken, out var logLevelExpression, out var searchStartIndex))
         {
             return false;
         }
 
-        if (!TryFindMessageTemplate(semanticModel, arguments, searchStartIndex, cancellationToken, out var templateIndex, out var template))
+        if (!LoggerAnalysisHelpers.TryFindMessageTemplate(semanticModel, arguments, searchStartIndex, cancellationToken, out var templateIndex, out var template))
         {
             return false;
         }
 
         var prefixArguments = arguments.Skip(searchStartIndex).Take(templateIndex - searchStartIndex).ToImmutableArray();
         var exceptionArguments = prefixArguments
-            .Where(argument => IsExceptionType(semanticModel.GetTypeInfo(argument.Expression, cancellationToken).ConvertedType ?? semanticModel.GetTypeInfo(argument.Expression, cancellationToken).Type))
+            .Where(argument => LoggerAnalysisHelpers.IsExceptionType(semanticModel.GetTypeInfo(argument.Expression, cancellationToken).ConvertedType ?? semanticModel.GetTypeInfo(argument.Expression, cancellationToken).Type))
             .ToImmutableArray();
         if (prefixArguments.Length != exceptionArguments.Length || exceptionArguments.Length > 1)
         {
@@ -130,7 +135,7 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
 
         ArgumentSyntax? exceptionArgument = exceptionArguments.Length == 1 ? exceptionArguments[0] : null;
         var valueArguments = arguments.Skip(templateIndex + 1).ToImmutableArray();
-        var placeholderNames = ExtractPlaceholders(template);
+        var placeholderNames = LoggerAnalysisHelpers.ExtractPlaceholders(template);
         if (placeholderNames.Count != valueArguments.Length)
         {
             return false;
@@ -159,7 +164,7 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
         for (var index = 0; index < valueArguments.Length; index++)
         {
             var argument = valueArguments[index];
-            var parameterName = CreateParameterName(argument.Expression, placeholderNames[index], usedNames, index + 1);
+            var parameterName = LoggerAnalysisHelpers.CreateParameterName(argument.Expression, placeholderNames[index], usedNames, index + 1);
             generatedParameters.Add(new(
                 parameterName,
                 GetExpressionTypeDisplayString(semanticModel, argument.Expression, cancellationToken)));
@@ -170,89 +175,6 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
             CreateReplacementInvocation(methodName, replacementArguments),
             CreateGeneratedMethod(methodName, methodSymbol.Name, logLevelExpression, template, generatedParameters, exceptionArgument is not null));
         return true;
-    }
-
-    private static bool TryGetLogLevelExpression(
-        SemanticModel semanticModel,
-        IMethodSymbol methodSymbol,
-        SeparatedSyntaxList<ArgumentSyntax> arguments,
-        CancellationToken cancellationToken,
-        out string logLevelExpression,
-        out int searchStartIndex)
-    {
-        searchStartIndex = 0;
-        if (methodSymbol.Name != "Log")
-        {
-            logLevelExpression = methodSymbol.Name switch
-            {
-                "LogTrace" => "global::Microsoft.Extensions.Logging.LogLevel.Trace",
-                "LogDebug" => "global::Microsoft.Extensions.Logging.LogLevel.Debug",
-                "LogInformation" => "global::Microsoft.Extensions.Logging.LogLevel.Information",
-                "LogWarning" => "global::Microsoft.Extensions.Logging.LogLevel.Warning",
-                "LogError" => "global::Microsoft.Extensions.Logging.LogLevel.Error",
-                "LogCritical" => "global::Microsoft.Extensions.Logging.LogLevel.Critical",
-                _ => string.Empty,
-            };
-
-            return logLevelExpression.Length > 0;
-        }
-
-        if (arguments.Count == 0)
-        {
-            logLevelExpression = string.Empty;
-            return false;
-        }
-
-        var levelSymbol = semanticModel.GetSymbolInfo(arguments[0].Expression, cancellationToken).Symbol as IFieldSymbol;
-        if (levelSymbol?.ContainingType is not { Name: "LogLevel" } levelType || levelType.ContainingNamespace.ToDisplayString() != "Microsoft.Extensions.Logging")
-        {
-            logLevelExpression = string.Empty;
-            return false;
-        }
-
-        logLevelExpression = levelSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + levelSymbol.Name;
-        searchStartIndex = 1;
-        return true;
-    }
-
-    private static bool TryFindMessageTemplate(
-        SemanticModel semanticModel,
-        SeparatedSyntaxList<ArgumentSyntax> arguments,
-        int startIndex,
-        CancellationToken cancellationToken,
-        out int templateIndex,
-        out string template)
-    {
-        templateIndex = -1;
-        template = string.Empty;
-
-        for (var index = startIndex; index < arguments.Count; index++)
-        {
-            var constantValue = semanticModel.GetConstantValue(arguments[index].Expression, cancellationToken);
-            if (constantValue.HasValue && constantValue.Value is string templateValue)
-            {
-                templateIndex = index;
-                template = templateValue;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsExceptionType(ITypeSymbol? typeSymbol)
-    {
-        while (typeSymbol is not null)
-        {
-            if (typeSymbol.Name == nameof(Exception) && typeSymbol.ContainingNamespace.ToDisplayString() == nameof(System))
-            {
-                return true;
-            }
-
-            typeSymbol = (typeSymbol as INamedTypeSymbol)?.BaseType;
-        }
-
-        return false;
     }
 
     private static string CreateMethodName(TypeDeclarationSyntax containingType, string containingMethodName)
@@ -363,114 +285,6 @@ public sealed class PreferLoggerMessageCodeFixProvider : CodeFixProvider
 
     private static string GetTypeDisplayString(ITypeSymbol? typeSymbol) =>
         typeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "global::System.Object";
-
-    private static List<string> ExtractPlaceholders(string template)
-    {
-        var placeholders = new List<string>();
-        for (var index = 0; index < template.Length; index++)
-        {
-            if (template[index] != '{')
-            {
-                continue;
-            }
-
-            if (index + 1 < template.Length && template[index + 1] == '{')
-            {
-                index++;
-                continue;
-            }
-
-            var endIndex = template.IndexOf('}', index + 1);
-            if (endIndex < 0)
-            {
-                break;
-            }
-
-            var token = template.Substring(index + 1, endIndex - index - 1).Trim();
-            if (token.Length > 0 && (token[0] == '@' || token[0] == '$'))
-            {
-                token = token.Substring(1);
-            }
-
-            var delimiterIndex = token.IndexOfAny(PlaceholderDelimiters);
-            if (delimiterIndex >= 0)
-            {
-                token = token.Substring(0, delimiterIndex);
-            }
-
-            if (token.Length > 0)
-            {
-                placeholders.Add(token);
-            }
-
-            index = endIndex;
-        }
-
-        return placeholders;
-    }
-
-    private static string CreateParameterName(ExpressionSyntax expression, string placeholderName, HashSet<string> usedNames, int index)
-    {
-        var baseName = expression is IdentifierNameSyntax identifier
-            ? SanitizeIdentifier(identifier.Identifier.ValueText)
-            : ToCamelCase(SanitizeIdentifier(placeholderName));
-
-        if (string.IsNullOrEmpty(baseName))
-        {
-            baseName = "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        var candidate = baseName;
-        var suffix = 1;
-        while (!usedNames.Add(candidate))
-        {
-            candidate = baseName + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            suffix++;
-        }
-
-        return candidate;
-    }
-
-    private static string SanitizeIdentifier(string value)
-    {
-        var builder = new StringBuilder();
-        foreach (var character in value)
-        {
-            if (builder.Length == 0)
-            {
-                if (SyntaxFacts.IsIdentifierStartCharacter(character))
-                {
-                    builder.Append(character);
-                }
-                else if (SyntaxFacts.IsIdentifierPartCharacter(character))
-                {
-                    builder.Append('_');
-                    builder.Append(character);
-                }
-            }
-            else if (SyntaxFacts.IsIdentifierPartCharacter(character))
-            {
-                builder.Append(character);
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private static string ToCamelCase(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return value;
-        }
-
-        if (value.Length == 1)
-        {
-            return char.ToLowerInvariant(value[0]).ToString();
-        }
-
-        return char.ToLowerInvariant(value[0]) + value.Substring(1);
-    }
 
     private readonly struct LoggerMessageScaffold
     {

@@ -7,12 +7,18 @@ using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace WitnessSharp.Analyzers;
 
+/// <summary>
+/// Analyzer that emits <c>WS0001</c> when a <c>IWitness&lt;T&gt;.Logger</c> extension method logs with an
+/// ad-hoc template, suggesting the high-performance <c>[LoggerMessage]</c> pattern instead.
+/// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class PreferLoggerMessageAnalyzer : DiagnosticAnalyzer
 {
+    /// <inheritdoc/>
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(DiagnosticDescriptors.WS0001_PreferLoggerMessage);
 
+    /// <inheritdoc/>
     public override void Initialize(AnalysisContext context)
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);

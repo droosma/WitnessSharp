@@ -4,23 +4,60 @@ using Microsoft.Extensions.Logging;
 
 namespace WitnessSharp.Testing;
 
+/// <summary>
+/// An in-memory <see cref="IWitness{T}"/> test double that records logged messages, recorded metric
+/// measurements and stopped activities for assertion. Thread-safe: the listener callbacks that capture
+/// metrics and activities may run on arbitrary threads.
+/// </summary>
+/// <typeparam name="T">The type used as the logger category.</typeparam>
 public sealed class TestWitness<T> : IWitness<T>, IDisposable
 {
+    private readonly object _gate = new();
     private readonly TestLogger<T> _logger = new();
     private readonly List<RecordedMetric> _metrics = [];
     private readonly List<StartedActivity> _activities = [];
     private readonly MeterListener _meterListener;
     private readonly ActivityListener _activityListener;
 
+    /// <inheritdoc/>
     public Meter Meter { get; }
+
+    /// <inheritdoc/>
     public ActivitySource ActivitySource { get; }
+
+    /// <inheritdoc/>
     public ILogger<T> Logger => _logger;
+
     ILogger IWitness.Logger => _logger;
 
+    /// <summary>Gets a snapshot of the messages logged so far.</summary>
     public IReadOnlyList<LoggedMessage> LoggedMessages => _logger.Messages;
-    public IReadOnlyList<RecordedMetric> RecordedMetrics => _metrics;
-    public IReadOnlyList<StartedActivity> StartedActivities => _activities;
 
+    /// <summary>Gets a snapshot of the metric measurements recorded so far.</summary>
+    public IReadOnlyList<RecordedMetric> RecordedMetrics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _metrics.ToArray();
+            }
+        }
+    }
+
+    /// <summary>Gets a snapshot of the activities started (and stopped) so far.</summary>
+    public IReadOnlyList<StartedActivity> StartedActivities
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _activities.ToArray();
+            }
+        }
+    }
+
+    /// <summary>Initializes a new instance of the <see cref="TestWitness{T}"/> class.</summary>
     public TestWitness()
     {
         var name = typeof(T).FullName ?? typeof(T).Name;
@@ -53,7 +90,10 @@ public sealed class TestWitness<T> : IWitness<T>, IDisposable
                 var tags = activity.Tags
                     .Select(tag => new KeyValuePair<string, object?>(tag.Key, tag.Value))
                     .ToList();
-                _activities.Add(new StartedActivity(activity.DisplayName, tags, activity.Status));
+                lock (_gate)
+                {
+                    _activities.Add(new StartedActivity(activity.DisplayName, tags, activity.Status));
+                }
             },
         };
         ActivitySource.AddActivityListener(_activityListener);
@@ -61,9 +101,14 @@ public sealed class TestWitness<T> : IWitness<T>, IDisposable
 
     private void OnMeasurement<TMeasurement>(Instrument instrument, TMeasurement measurement, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
     {
-        _metrics.Add(new RecordedMetric(instrument.Name, measurement, tags.ToArray()));
+        var recorded = new RecordedMetric(instrument.Name, measurement, tags.ToArray());
+        lock (_gate)
+        {
+            _metrics.Add(recorded);
+        }
     }
 
+    /// <summary>Disposes the listeners, meter and activity source.</summary>
     public void Dispose()
     {
         _meterListener.Dispose();

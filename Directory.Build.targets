@@ -7,6 +7,12 @@
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
+  <!-- Non-packable projects (tests, samples) don't ship docs; suppress missing-doc noise.
+       Evaluated here (not in Directory.Build.props) so the per-project IsPackable value is set. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'true'">
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
   <!-- Test projects: snake_case test method names are conventional in xUnit;
        Assert.* helpers commonly return typed results that the caller discards. -->
   <PropertyGroup Condition="'$(IsTestProject)' == 'true'">

@@ -11,5 +11,5 @@ internal static class DiagnosticDescriptors
         category: "Performance",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true,
-        helpLinkUri: "https://github.com/witnesssharp/witnesssharp/blob/main/docs/rules/WS0001.md");
+        helpLinkUri: "https://github.com/droosma/WitnessSharp/blob/main/docs/rules/WS0001.md");
 }

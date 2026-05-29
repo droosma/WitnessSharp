@@ -9,6 +9,10 @@ using OpenTelemetry.Trace;
 
 namespace WitnessSharp;
 
+/// <summary>
+/// Fluent opt-in extensions on <see cref="IWitnessBuilder"/> for enabling instrumentations, exporters and
+/// logging-provider behavior. These are thin pass-throughs to the OpenTelemetry SDK.
+/// </summary>
 public static class WitnessBuilderExtensions
 {
     // ----- Instrumentation -----
@@ -21,12 +25,19 @@ public static class WitnessBuilderExtensions
     // Roslyn harness validates behavior; here we lean on OTel's own test suite for the
     // pass-through guarantee.
 
+    /// <summary>Enables ASP.NET Core and HttpClient instrumentation.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     // Stryker disable all : pass-through to OTel SDK; see comment above.
     public static IWitnessBuilder WithStandardInstrumentations(this IWitnessBuilder builder) =>
         builder
             .WithAspNetCoreInstrumentation()
             .WithHttpClientInstrumentation();
 
+    /// <summary>Enables ASP.NET Core tracing instrumentation.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="configure">Optional delegate to configure the instrumentation options.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     // Stryker disable all : pass-through to OTel SDK; see comment above.
     public static IWitnessBuilder WithAspNetCoreInstrumentation(
         this IWitnessBuilder builder,
@@ -43,6 +54,10 @@ public static class WitnessBuilderExtensions
             }
         });
 
+    /// <summary>Enables HttpClient tracing instrumentation.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="configure">Optional delegate to configure the instrumentation options.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     // Stryker disable all : pass-through to OTel SDK; see comment above.
     public static IWitnessBuilder WithHttpClientInstrumentation(
         this IWitnessBuilder builder,
@@ -61,6 +76,10 @@ public static class WitnessBuilderExtensions
 
     // ----- Exporters -----
 
+    /// <summary>Adds the OTLP exporter for traces, metrics and logs.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="configure">Optional delegate to configure the OTLP exporter options.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     // Stryker disable all : pass-through to OTel SDK; see comment above.
     public static IWitnessBuilder WithOtlpExporter(
         this IWitnessBuilder builder,
@@ -102,6 +121,9 @@ public static class WitnessBuilderExtensions
         return builder;
     }
 
+    /// <summary>Adds the console exporter for traces, metrics and logs.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     // Stryker disable all : pass-through to OTel SDK; see comment above.
     public static IWitnessBuilder WithConsoleExporter(this IWitnessBuilder builder)
     {
@@ -113,6 +135,9 @@ public static class WitnessBuilderExtensions
 
     // ----- Logging providers -----
 
+    /// <summary>Clears all previously registered logging providers (opt-in).</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <returns>The same builder, to allow chaining.</returns>
     public static IWitnessBuilder ClearLoggingProviders(this IWitnessBuilder builder)
     {
         builder.Services.AddLogging(b => b.ClearProviders());

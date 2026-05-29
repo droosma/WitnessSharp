@@ -9,11 +9,15 @@
     <IncludeBuildOutput>true</IncludeBuildOutput>
     <BuildOutputTargetFolder>analyzers/dotnet/cs</BuildOutputTargetFolder>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
-    <!-- RS1038: code fix + analyzer in same assembly is acceptable for small packages.
-         RS2008: release tracking deferred until v1. -->
-    <NoWarn>$(NoWarn);NU5128;RS1038;RS2008</NoWarn>
+    <!-- RS1038: code fix + analyzer in same assembly is acceptable for small packages. -->
+    <NoWarn>$(NoWarn);NU5128;RS1038</NoWarn>
     <Description>Roslyn analyzers and source-generator interceptor for WitnessSharp (WS0001 + transparent [LoggerMessage] optimization).</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
