@@ -338,17 +338,7 @@ builder.Services.AddWitness(options =>
 
 ## Testing
 
-`WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records:
-
-- logged messages
-- recorded metrics
-- started activities
-
-It also ships assertion helpers:
-
-- `AssertLogged(...)`
-- `AssertActivityStarted(...)`
-- `AssertMetricRecorded(...)`
+`WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records logged messages, metrics, and activities. It includes `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
 
 Example:
 
@@ -424,13 +414,7 @@ For background on source-generated logging, see the official [`LoggerMessage` do
 
 ## AOT support
 
-WitnessSharp is designed to stay friendly to trimming and native AOT.
-
-A few practical notes:
-
-- The core package keeps to standard .NET and OpenTelemetry APIs instead of runtime-heavy abstractions.
-- Your final AOT story still depends on the instrumentations and exporters you enable.
-- When you publish with `PublishAot=true`, watch for warnings from upstream OpenTelemetry or exporter packages and treat them seriously.
+WitnessSharp is designed to stay friendly to trimming and native AOT. The core package uses standard .NET and OpenTelemetry APIs. Your final AOT story depends on the instrumentations and exporters you enable — when publishing with `PublishAot=true`, watch for warnings from upstream packages.
 
 ## Package family
 
@@ -443,13 +427,7 @@ A few practical notes:
 
 ## Contributing
 
-Contributions are welcome. If you want to help:
-
-1. Build the solution with `dotnet build WitnessSharp.slnx`
-2. Run the test suite with `dotnet test WitnessSharp.slnx`
-3. Open a pull request with a clear description of the change
-
-If a future `CONTRIBUTING.md` appears, follow that file first.
+Contributions are welcome. Build with `dotnet build WitnessSharp.slnx`, test with `dotnet test WitnessSharp.slnx`, then open a pull request. If a `CONTRIBUTING.md` appears, follow that file first.
 
 ## License
 
