@@ -86,6 +86,7 @@ public class WitnessedAction : IDisposable
         handler(this);
 
         Activity?.Dispose();
+        // Stryker disable once Statement : no finalizer exists, so removing this has no observable effect. Removing it is an equivalent mutant
         GC.SuppressFinalize(this);
     }
 
