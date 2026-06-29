@@ -64,4 +64,15 @@ public class WitnessExtensionsTests : IDisposable
 
         Assert.Null(action.Activity);
     }
+
+    [Fact]
+    public void StartAction_on_non_generic_witness_creates_activity()
+    {
+        IWitness witness = CreateWitness();
+
+        using var action = witness.StartAction("op");
+
+        Assert.NotNull(action.Activity);
+        Assert.Equal("op", action.Activity!.OperationName);
+    }
 }

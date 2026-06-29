@@ -59,6 +59,28 @@ Outcomes are explicit:
 
 `Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
 
+When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`. That means the same `IWitness<T>` extension methods you call on a witness (such as logging helpers) can be called directly on the action, keeping a single operation's call site consistent:
+
+```csharp
+public async Task<DashboardSummary> RetrieveSummaryAsync()
+{
+    using var action = witness.StartAction(nameof(RetrieveSummaryAsync));
+    try
+    {
+        var summary = await _controller.RetrieveSummaryAsync();
+        action.LogDashboardSummaryRetrieved(); // same extension you'd call on the witness
+        return summary;
+    }
+    catch (Exception exception)
+    {
+        action.Failed(exception);
+        throw;
+    }
+}
+```
+
+Use `var` (not an explicit `WitnessedAction` type) so the action keeps its `IWitness<T>` facet and the typed extension methods resolve.
+
 ### Logging via extension methods
 
 WitnessSharp leans toward extension methods on `IWitness<T>` for recurring log messages. That keeps message templates in one place and keeps call sites small.

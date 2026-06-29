@@ -6,9 +6,13 @@ namespace WitnessSharp;
 /// A disposable primitive that wraps an <see cref="System.Diagnostics.Activity"/> and tracks the
 /// <see cref="WitnessedOutcome"/> of an operation. Disposing the action finalizes the activity status.
 /// </summary>
-public sealed class WitnessedAction : IDisposable
+public class WitnessedAction : IDisposable
 {
     internal const string OutcomeTagName = "witness.outcome";
+
+    /// <summary>Initializes a new instance of the <see cref="WitnessedAction"/> class.</summary>
+    /// <param name="activity">The activity to wrap, or <see langword="null"/> when none was created.</param>
+    public WitnessedAction(Activity? activity) => Activity = activity;
 
     /// <summary>Gets the underlying activity, or <see langword="null"/> when no listener was sampling.</summary>
     public Activity? Activity { get; }
@@ -16,11 +20,26 @@ public sealed class WitnessedAction : IDisposable
     /// <summary>Gets the current outcome of the operation. Defaults to <see cref="WitnessedOutcome.Success"/>.</summary>
     public WitnessedOutcome Outcome { get; private set; } = WitnessedOutcome.Success;
 
-    /// <summary>Initializes a new instance of the <see cref="WitnessedAction"/> class.</summary>
-    /// <param name="activity">The activity to wrap, or <see langword="null"/> when none was created.</param>
-    public WitnessedAction(Activity? activity)
+    /// <summary>
+    /// Finalizes the activity status and disposes it. A <see cref="WitnessedOutcome.Failure"/> maps to
+    /// <see cref="ActivityStatusCode.Error"/>; all other outcomes map to <see cref="ActivityStatusCode.Ok"/>.
+    /// For non-success outcomes the outcome name is also recorded as the <c>witness.outcome</c> tag, so a
+    /// cancelled operation remains distinguishable from a successful one (the activity status description is
+    /// only retained for the <see cref="ActivityStatusCode.Error"/> code and would otherwise be lost).
+    /// </summary>
+    public void Dispose()
     {
-        Activity = activity;
+        var status = Outcome == WitnessedOutcome.Failure
+                         ? ActivityStatusCode.Error
+                         : ActivityStatusCode.Ok;
+        if(Outcome != WitnessedOutcome.Success)
+        {
+            Activity?.SetTag(OutcomeTagName, Outcome.ToString());
+        }
+
+        Activity?.SetStatus(status);
+        Activity?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>Sets a tag on the underlying activity. No-op when there is no activity.</summary>
@@ -39,7 +58,7 @@ public sealed class WitnessedAction : IDisposable
     /// <returns>The same instance, to allow chaining.</returns>
     public WitnessedAction AddEvent(string name, ActivityTagsCollection? tags = null)
     {
-        Activity?.AddEvent(new ActivityEvent(name, tags: tags));
+        Activity?.AddEvent(new ActivityEvent(name, tags:tags));
         return this;
     }
 
@@ -51,7 +70,7 @@ public sealed class WitnessedAction : IDisposable
     public void Failed(Exception? exception = null)
     {
         Outcome = WitnessedOutcome.Failure;
-        if (exception is not null)
+        if(exception is not null)
         {
             RecordException(exception);
         }
@@ -66,11 +85,11 @@ public sealed class WitnessedAction : IDisposable
     {
         Outcome = WitnessedOutcome.Failure;
         Activity?.AddEvent(new ActivityEvent(
-            "exception",
-            tags: new ActivityTagsCollection
-            {
-                { "exception.message", reason },
-            }));
+                                             "exception",
+                                             tags:new ActivityTagsCollection
+                                                  {
+                                                      {"exception.message", reason},
+                                                  }));
     }
 
     /// <summary>Marks the operation as cancelled.</summary>
@@ -79,45 +98,18 @@ public sealed class WitnessedAction : IDisposable
     /// <summary>Stops the underlying activity without disposing it. No-op when there is no activity.</summary>
     public void Finish() => Activity?.Stop();
 
-    /// <summary>
-    /// Finalizes the activity status and disposes it. A <see cref="WitnessedOutcome.Failure"/> maps to
-    /// <see cref="ActivityStatusCode.Error"/>; all other outcomes map to <see cref="ActivityStatusCode.Ok"/>.
-    /// For non-success outcomes the outcome name is also recorded as the <c>witness.outcome</c> tag, so a
-    /// cancelled operation remains distinguishable from a successful one (the activity status description is
-    /// only retained for the <see cref="ActivityStatusCode.Error"/> code and would otherwise be lost).
-    /// </summary>
-    public void Dispose()
-    {
-        var status = Outcome == WitnessedOutcome.Failure
-            ? ActivityStatusCode.Error
-            : ActivityStatusCode.Ok;
-        if (Outcome != WitnessedOutcome.Success)
-        {
-            Activity?.SetTag(OutcomeTagName, Outcome.ToString());
-        }
-
-        Activity?.SetStatus(status);
-        Activity?.Dispose();
-    }
-
     private void RecordException(Exception exception)
     {
-        if (Activity is null)
-        {
-            return;
-        }
-
 #if NET9_0_OR_GREATER
-        Activity.AddException(exception);
+        Activity?.AddException(exception);
 #else
-        Activity.AddEvent(new ActivityEvent(
-            "exception",
-            tags: new ActivityTagsCollection
-            {
-                { "exception.type", exception.GetType().FullName },
-                { "exception.message", exception.Message },
-                { "exception.stacktrace", exception.ToString() },
-            }));
+        Activity?.AddEvent(new ActivityEvent("exception",
+                                             tags:new ActivityTagsCollection
+                                                  {
+                                                      {"exception.type", exception.GetType().FullName},
+                                                      {"exception.message", exception.Message},
+                                                      {"exception.stacktrace", exception.ToString()},
+                                                  }));
 #endif
     }
 }
