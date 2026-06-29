@@ -10,6 +10,35 @@ public class WitnessedAction : IDisposable
 {
     internal const string OutcomeTagName = "witness.outcome";
 
+    /// <summary>
+    /// The default <see cref="OnSuccess"/> behaviour: sets the activity status to
+    /// <see cref="ActivityStatusCode.Ok"/> and records no outcome tag.
+    /// </summary>
+    private static readonly Action<WitnessedAction> _defaultOnSuccess =
+        action => action.Activity?.SetStatus(ActivityStatusCode.Ok);
+
+    /// <summary>
+    /// The default <see cref="OnFailure"/> behaviour: sets the activity status to
+    /// <see cref="ActivityStatusCode.Error"/> and records the <c>witness.outcome</c> tag as
+    /// <c>Failure</c>.
+    /// </summary>
+    private static readonly Action<WitnessedAction> _defaultOnFailure = action =>
+                                                                       {
+                                                                           action.Activity?.SetTag(OutcomeTagName, nameof(WitnessedOutcome.Failure));
+                                                                           action.Activity?.SetStatus(ActivityStatusCode.Error);
+                                                                       };
+
+    /// <summary>
+    /// The default <see cref="OnCancelled"/> behaviour: sets the activity status to
+    /// <see cref="ActivityStatusCode.Ok"/> and records the <c>witness.outcome</c> tag as <c>Cancelled</c>,
+    /// so a cancelled operation remains distinguishable from a successful one.
+    /// </summary>
+    private static readonly Action<WitnessedAction> _defaultOnCancelled = action =>
+    {
+        action.Activity?.SetTag(OutcomeTagName, nameof(WitnessedOutcome.Cancelled));
+        action.Activity?.SetStatus(ActivityStatusCode.Ok);
+    };
+
     /// <summary>Initializes a new instance of the <see cref="WitnessedAction"/> class.</summary>
     /// <param name="activity">The activity to wrap, or <see langword="null"/> when none was created.</param>
     public WitnessedAction(Activity? activity) => Activity = activity;
@@ -21,23 +50,41 @@ public class WitnessedAction : IDisposable
     public WitnessedOutcome Outcome { get; private set; } = WitnessedOutcome.Success;
 
     /// <summary>
-    /// Finalizes the activity status and disposes it. A <see cref="WitnessedOutcome.Failure"/> maps to
-    /// <see cref="ActivityStatusCode.Error"/>; all other outcomes map to <see cref="ActivityStatusCode.Ok"/>.
-    /// For non-success outcomes the outcome name is also recorded as the <c>witness.outcome</c> tag, so a
-    /// cancelled operation remains distinguishable from a successful one (the activity status description is
-    /// only retained for the <see cref="ActivityStatusCode.Error"/> code and would otherwise be lost).
+    /// Gets or sets the handler invoked on <see cref="Dispose"/> when the <see cref="Outcome"/> is
+    /// <see cref="WitnessedOutcome.Success"/>. The wrapped <see cref="Activity"/> is available via the
+    /// supplied action. Defaults to <see cref="_defaultOnSuccess"/>.
+    /// </summary>
+    public Action<WitnessedAction> OnSuccess { get; init; } = _defaultOnSuccess;
+
+    /// <summary>
+    /// Gets or sets the handler invoked on <see cref="Dispose"/> when the <see cref="Outcome"/> is
+    /// <see cref="WitnessedOutcome.Failure"/>. The wrapped <see cref="Activity"/> is available via the
+    /// supplied action. Defaults to <see cref="_defaultOnFailure"/>.
+    /// </summary>
+    public Action<WitnessedAction> OnFailure { get; init; } = _defaultOnFailure;
+
+    /// <summary>
+    /// Gets or sets the handler invoked on <see cref="Dispose"/> when the <see cref="Outcome"/> is
+    /// <see cref="WitnessedOutcome.Cancelled"/>. The wrapped <see cref="Activity"/> is available via the
+    /// supplied action. Defaults to <see cref="_defaultOnCancelled"/>.
+    /// </summary>
+    public Action<WitnessedAction> OnCancelled { get; init; } = _defaultOnCancelled;
+
+    /// <summary>
+    /// Invokes the handler matching the current <see cref="Outcome"/> (<see cref="OnSuccess"/>,
+    /// <see cref="OnFailure"/> or <see cref="OnCancelled"/>) to reflect the outcome on the activity, then
+    /// disposes the underlying activity. The activity is always disposed regardless of the handler.
     /// </summary>
     public void Dispose()
     {
-        var status = Outcome == WitnessedOutcome.Failure
-                         ? ActivityStatusCode.Error
-                         : ActivityStatusCode.Ok;
-        if(Outcome != WitnessedOutcome.Success)
+        var handler = Outcome switch
         {
-            Activity?.SetTag(OutcomeTagName, Outcome.ToString());
-        }
+            WitnessedOutcome.Failure => OnFailure,
+            WitnessedOutcome.Cancelled => OnCancelled,
+            _ => OnSuccess,
+        };
+        handler(this);
 
-        Activity?.SetStatus(status);
         Activity?.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -84,8 +131,7 @@ public class WitnessedAction : IDisposable
     public void Failed(string reason)
     {
         Outcome = WitnessedOutcome.Failure;
-        Activity?.AddEvent(new ActivityEvent(
-                                             "exception",
+        Activity?.AddEvent(new ActivityEvent("exception",
                                              tags:new ActivityTagsCollection
                                                   {
                                                       {"exception.message", reason},

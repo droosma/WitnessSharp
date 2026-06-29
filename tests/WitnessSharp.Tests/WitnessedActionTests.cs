@@ -293,4 +293,80 @@ public class WitnessedActionTests : IDisposable
         // Activity.Dispose() calls Stop() internally, which sets Duration > 0.
         Assert.True(activity.Duration > TimeSpan.Zero);
     }
+
+    // ----- customizable outcome handlers -----
+
+    [Fact]
+    public void Dispose_invokes_custom_OnSuccess_for_Success_outcome()
+    {
+        var activity = StartTestActivity();
+        WitnessedAction? observed = null;
+        var action = new WitnessedAction(activity) { OnSuccess = a => observed = a };
+
+        action.Dispose();
+
+        Assert.Same(action, observed);
+        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
+    }
+
+    [Fact]
+    public void Dispose_invokes_custom_OnFailure_for_Failure_outcome()
+    {
+        var activity = StartTestActivity();
+        WitnessedAction? observed = null;
+        var action = new WitnessedAction(activity) { OnFailure = a => observed = a };
+        action.Failed();
+
+        action.Dispose();
+
+        Assert.Same(action, observed);
+        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
+    }
+
+    [Fact]
+    public void Dispose_invokes_custom_OnCancelled_for_Cancelled_outcome()
+    {
+        var activity = StartTestActivity();
+        WitnessedAction? observed = null;
+        var action = new WitnessedAction(activity) { OnCancelled = a => observed = a };
+        action.Cancelled();
+
+        action.Dispose();
+
+        Assert.Same(action, observed);
+        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
+    }
+
+    [Fact]
+    public void Dispose_still_disposes_activity_when_custom_handler_is_set()
+    {
+        var activity = StartTestActivity();
+        var action = new WitnessedAction(activity) { OnSuccess = _ => { } };
+
+        action.Dispose();
+
+        Assert.True(activity.Duration > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void Custom_handler_has_full_control_over_the_activity()
+    {
+        var activity = StartTestActivity();
+        var action = new WitnessedAction(activity)
+                     {
+                         OnFailure = a =>
+                                     {
+                                         a.SetTag("custom", "value");
+                                         a.Activity?.SetStatus(ActivityStatusCode.Error, "custom reason");
+                                     },
+                     };
+        action.Failed();
+
+        action.Dispose();
+
+        Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.Equal("custom reason", activity.StatusDescription);
+        Assert.Contains(activity.TagObjects, t => t.Key == "custom" && Equals(t.Value, "value"));
+        Assert.DoesNotContain(activity.TagObjects, t => t.Key == WitnessedAction.OutcomeTagName);
+    }
 }
