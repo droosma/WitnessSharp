@@ -214,10 +214,9 @@ public static IWitnessBuilder ClearLoggingProviders(this IWitnessBuilder builder
 ### Resource attributes (auto)
 
 The package adds these to `ResourceBuilder` for every consumer:
-- `service.name`, `service.namespace`, `service.version` — from options.
-- `service.instance.id` — from options or `Environment.MachineName`.
-- `telemetry.sdk.*` — added automatically by the OTel SDK.
+- `service.name`, `service.namespace`, `service.version`, `service.instance.id` — from `WitnessOptions` (`service.instance.id` falls back to `Environment.MachineName`).
 - `deployment.environment` — from options, falling back to `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`.
+- `telemetry.sdk.*` — added automatically by the OTel SDK.
 - Anything in `AdditionalResourceAttributes`.
 
 ### Logging providers
@@ -227,9 +226,7 @@ Lean default: **do not** call `LoggingBuilder.ClearProviders()`. The package add
 ### Dropped from the current code
 
 - `OpenTelemetryConfiguration` record (replaced by options + builder).
-- Hardcoded `"sage"` service namespace default.
-- Hardcoded source filters `"Taqa.*"`, `"Azure.*"` (consumers add their own sources via `.ConfigureTracing(b => b.AddSource(...))`).
-- Hardcoded health-check paths and SQL thresholds.
+- Hardcoded defaults (`"sage"` service namespace, `"Taqa.*"`/`"Azure.*"` source filters, health-check paths, SQL thresholds) — consumers configure their own.
 - `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` — **no custom processors in v1**. Moved to a README "Recipes" section with copy-paste, fully parameterized examples. A complementary package may be added later.
 - `implicit operator ResourceBuilder` — surprising; gone.
 - `services.UseOpenTelemetry(...)` — replaced with `AddWitness(...)` to match .NET conventions.
@@ -253,15 +250,7 @@ Separate NuGet package. Users opt in.
 
 ### 2. Interceptor-based transparent `[LoggerMessage]` optimization (net9.0+/net10.0)
 
-A source-generator interceptor that:
-1. Detects `witness.Logger.LogXxx(...)` calls inside extension methods on `IWitness<T>`.
-2. At compile time, transparently rewrites these calls to `[LoggerMessage]`-equivalent allocation-free code.
-3. The consumer writes natural `ILogger` calls and gets optimized output without knowing or caring about `[LoggerMessage]`.
-
-**Net8.0 behavior**: standard `ILogger` path (no interception). `WS0001` code-fix offers manual optimization.
-**Net9.0+/net10.0 behavior**: interceptor auto-optimizes. `WS0001` is suppressed for intercepted call sites.
-
-This interceptor is **core to the package's value proposition** — it delivers "zero ceremony, zero overhead" structured logging.
+On net9.0+/net10.0, a source-generator interceptor transparently rewrites `witness.Logger.LogXxx(...)` calls inside `IWitness<T>` extension methods to `[LoggerMessage]`-equivalent allocation-free code at compile time — the consumer writes natural `ILogger` calls and gets zero-overhead output. On net8.0, no interception occurs; `WS0001` code-fix offers manual optimization. This is **core to the package's value proposition**.
 
 Future rules (not in v1): `WitnessedAction` must be in a `using`, `ActivitySource.StartActivity` name should be const-evaluable, avoid raw `Logger`/`ActivitySource`/`Meter` outside extension methods or test code, etc.
 
@@ -351,21 +340,13 @@ OSS housekeeping to ship at v1:
 
 Captured here so we don't lose context.
 
-1. **`WitnessedAction` extensibility/notification shape.**
-   - *Problem:* events (`OnSuccess`/`OnFailure`/`OnComplete`) were considered but are leak-prone (handler accumulation, swallowed exceptions) and not idiomatic for observability tooling.
-   - *Decision:* ship v1 **without** lifecycle events — `WitnessedAction` is a pure primitive.
-   - *Post-v1 candidates:* `IWitnessedActionObserver` registered at construction, or `Func<WitnessedAction, ValueTask>` completion callback. Design should preserve "primitive that users compose on top of" intent.
+1. **`WitnessedAction` extensibility/notification shape.** Lifecycle events (`OnSuccess`/`OnFailure`/`OnComplete`) were rejected as leak-prone and non-idiomatic — `WitnessedAction` ships as a pure primitive. Post-v1 candidates: `IWitnessedActionObserver` registered at construction, or a `Func<WitnessedAction, ValueTask>` callback preserving the "compose on top of" intent.
 
 2. **Brand name.** — *Resolved 2026-05-20.* The package family is `WitnessSharp` (with `.AzureMonitor`, `.Analyzers`, `.Testing`). Internal types drop the `Sharp` suffix per the RestSharp / NHibernate convention (`IWitness<T>`, `Witness<T>`, `WitnessedAction`, `IWitnessFactory`, `WitnessOptions`, `IWitnessBuilder`, `TestWitness<T>`). Config section binds from `Witness`. Diagnostic ID prefix is `WS`.
 
-3. **Custom processors package.**
-   - *Context:* v1 ships no custom OTel processors. Consumers use OTel native filtering.
-   - *Future:* if common filtering patterns emerge (health checks, fast SQL), a complementary `WitnessSharp.Processors` package can be added.
+3. **Custom processors package.** v1 ships none. A complementary `WitnessSharp.Processors` package may follow if common filtering patterns (health checks, fast SQL) warrant it.
 
-4. **SqlClient / EntityFrameworkCore instrumentation sub-packages.**
-   - *Context:* the original PLAN listed `WithSqlClientInstrumentation` and `WithEntityFrameworkCoreInstrumentation` on the core fluent builder. Pulling those instrumentations into the core would force `Microsoft.Data.SqlClient` and `Microsoft.EntityFrameworkCore.Relational` as transitive dependencies on every consumer, conflicting with the hexagonal "core is lean" principle.
-   - *Decision (2026-05-20):* ship them as separate sub-packages (`WitnessSharp.Instrumentation.SqlClient`, `WitnessSharp.Instrumentation.EntityFrameworkCore`) when demand warrants. Each contributes its own `WithX()` extension on `IWitnessBuilder`.
-   - *Trigger:* a real consumer asks for them, or v1 of either OTel-contrib package goes stable.
+4. **SqlClient / EntityFrameworkCore instrumentation sub-packages.** Kept out of core to avoid forcing heavy transitive deps on all consumers. Ship `WitnessSharp.Instrumentation.SqlClient` and `WitnessSharp.Instrumentation.EntityFrameworkCore` as separate packages when demand warrants; each contributes its own `WithX()` to `IWitnessBuilder`.
 
 ---
 
