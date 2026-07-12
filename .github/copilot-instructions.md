@@ -35,10 +35,7 @@ Multi-targets: `net8.0` and `net10.0`. CI runs on both Ubuntu and Windows. SDK i
 
 ### TDD (Test-Driven Design)
 
-All production code is written test-first. The workflow is:
-1. Write a failing test that defines the desired behavior.
-2. Write the minimal production code to make it pass.
-3. Refactor while keeping tests green.
+All production code is written test-first (red → green → refactor).
 
 ### Quality Gates — enforced before moving to any next step
 
@@ -130,29 +127,8 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 
 ### Versioning
 
-- Central package management via `Directory.Packages.props`.
-- Version derived from git tags via MinVer/nbgv — no manual `<Version>` in csproj files.
-- SemVer starting at `0.1.0`.
+Central package management via `Directory.Packages.props`. Version derived from git tags (MinVer/nbgv) — no manual `<Version>` in csproj files. SemVer starting at `0.1.0`.
 
 ### No custom processors in v1
 
 No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
-
-### What was intentionally dropped from the reference implementation
-
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
-
-## Reference Implementation
-
-The original code being ported from lives at `D:\reference\Taqa\` (read-only). Key files:
-- `Taqa.OpenTelemetry\Monitor.cs` — original `Monitor<T>` interface (renamed to `Witness<T>` in this package).
-- `Taqa.OpenTelemetry\MonitoredAction.cs` — original `MonitoredAction` (renamed to `WitnessedAction`).
-- `Taqa.OpenTelemetry\OpenTelemetryConfiguration.cs` — old config (replaced by `WitnessOptions` + `IWitnessBuilder`).
-- `Taqa.OpenTelemetry\OpenTelemetryServiceCollectionExtensions.cs` — old DI entry point (replaced by `AddWitness`).
