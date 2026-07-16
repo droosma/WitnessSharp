@@ -37,13 +37,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main thing you inject. It bundles:
-
-- `ILogger<T>` for logs
-- `Meter` for metrics
-- `ActivitySource` for traces
-
-That shape keeps constructors short and keeps related observability tools together. It also avoids inventing new logging or metrics abstractions. If you already know the built-in .NET types, you already know most of WitnessSharp.
+`IWitness<T>` is the main thing you inject. It bundles `ILogger<T>`, `Meter`, and `ActivitySource`, keeping constructors short without hiding the standard .NET types.
 
 Most classes only need `IWitness<T>`. If you need a typed witness for a type discovered at runtime, inject `IWitnessFactory` and call `Create<T>()`.
 
@@ -51,11 +45,7 @@ Most classes only need `IWitness<T>`. If you need a typed witness for a type dis
 
 `WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
 
-Outcomes are explicit:
-
-- success is the default
-- `Failed(Exception)` or `Failed(string)` marks the action as a failure
-- `Cancelled()` marks it as cancelled
+Outcomes are explicit: success is the default; `Failed(Exception)`, `Failed(string)`, or `Cancelled()` marks other outcomes.
 
 `Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
 
@@ -97,10 +87,7 @@ The optional analyzer package spots these patterns and nudges you toward `Logger
 
 ### Design philosophy
 
-- Lean defaults. Nothing is enabled unless you opt in.
-- Fluent setup. Start with `AddWitness()`, then add instrumentations and exporters you actually want.
-- Native .NET first. WitnessSharp does not hide `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, or OpenTelemetry builders.
-- One injectable per call site. Logs, metrics, and traces stay together.
+Lean defaults — nothing enabled unless you opt in. Start with `AddWitness()` and add what you want. `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, and OpenTelemetry builders stay exposed. One injectable per call site keeps logs, metrics, and traces together.
 
 ## Installation
 
@@ -304,38 +291,6 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 
 </details>
 
-<details>
-<summary>Add custom resource attributes</summary>
-
-You can add shared metadata once and have it show up on logs, metrics, and traces.
-
-```json
-{
-  "Witness": {
-    "ServiceName": "orders-api",
-    "AdditionalResourceAttributes": {
-      "service.owner": "checkout",
-      "cloud.region": "westeurope",
-      "deployment.ring": "blue"
-    }
-  }
-}
-```
-
-You can do the same in code if you prefer:
-
-```csharp
-builder.Services.AddWitness(options =>
-{
-    options.ServiceName = "orders-api";
-    options.AdditionalResourceAttributes["service.owner"] = "checkout";
-    options.AdditionalResourceAttributes["cloud.region"] = "westeurope";
-    options.AdditionalResourceAttributes["deployment.ring"] = "blue";
-});
-```
-
-</details>
-
 ## Testing
 
 `WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records logged messages, metrics, and activities. It includes `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
@@ -379,17 +334,7 @@ public static void LogOrderPlaced(this IWitness<OrderService> witness, int order
 
 That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
 
-### Install the analyzer
-
-```bash
-dotnet add package WitnessSharp.Analyzers
-```
-
-### Configure severity in `.editorconfig`
-
-```ini
-dotnet_diagnostic.WS0001.severity = warning
-```
+Install with `dotnet add package WitnessSharp.Analyzers`. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`.
 
 ### The `LoggerMessage` pattern it promotes
 
