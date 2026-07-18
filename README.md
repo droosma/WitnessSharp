@@ -37,13 +37,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main thing you inject. It bundles:
-
-- `ILogger<T>` for logs
-- `Meter` for metrics
-- `ActivitySource` for traces
-
-That shape keeps constructors short and keeps related observability tools together. It also avoids inventing new logging or metrics abstractions. If you already know the built-in .NET types, you already know most of WitnessSharp.
+`IWitness<T>` is the main thing you inject. It bundles `ILogger<T>`, `Meter`, and `ActivitySource`, keeping constructors short and related observability tools together. It avoids inventing new abstractions — if you know the built-in .NET types, you already know most of WitnessSharp.
 
 Most classes only need `IWitness<T>`. If you need a typed witness for a type discovered at runtime, inject `IWitnessFactory` and call `Create<T>()`.
 
@@ -51,13 +45,7 @@ Most classes only need `IWitness<T>`. If you need a typed witness for a type dis
 
 `WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
 
-Outcomes are explicit:
-
-- success is the default
-- `Failed(Exception)` or `Failed(string)` marks the action as a failure
-- `Cancelled()` marks it as cancelled
-
-`Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
+Outcomes are explicit: success is the default; call `Failed(Exception)` or `Failed(string)` to mark failure, or `Cancelled()` for cancellation. `Dispose()` sets the final status and closes the activity; `Finish()` stops it without disposing the wrapper.
 
 When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`. That means the same `IWitness<T>` extension methods you call on a witness (such as logging helpers) can be called directly on the action, keeping a single operation's call site consistent:
 
@@ -304,38 +292,6 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 
 </details>
 
-<details>
-<summary>Add custom resource attributes</summary>
-
-You can add shared metadata once and have it show up on logs, metrics, and traces.
-
-```json
-{
-  "Witness": {
-    "ServiceName": "orders-api",
-    "AdditionalResourceAttributes": {
-      "service.owner": "checkout",
-      "cloud.region": "westeurope",
-      "deployment.ring": "blue"
-    }
-  }
-}
-```
-
-You can do the same in code if you prefer:
-
-```csharp
-builder.Services.AddWitness(options =>
-{
-    options.ServiceName = "orders-api";
-    options.AdditionalResourceAttributes["service.owner"] = "checkout";
-    options.AdditionalResourceAttributes["cloud.region"] = "westeurope";
-    options.AdditionalResourceAttributes["deployment.ring"] = "blue";
-});
-```
-
-</details>
-
 ## Testing
 
 `WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records logged messages, metrics, and activities. It includes `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
@@ -379,13 +335,7 @@ public static void LogOrderPlaced(this IWitness<OrderService> witness, int order
 
 That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
 
-### Install the analyzer
-
-```bash
-dotnet add package WitnessSharp.Analyzers
-```
-
-### Configure severity in `.editorconfig`
+Install with `dotnet add package WitnessSharp.Analyzers`. Configure severity in `.editorconfig`:
 
 ```ini
 dotnet_diagnostic.WS0001.severity = warning
