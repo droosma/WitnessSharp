@@ -246,17 +246,11 @@ Separate NuGet package. Users opt in.
 
 ### 1. Diagnostic rule: `WS0001 — Prefer [LoggerMessage] for log calls in IWitness<T> extension methods`
 
-- Triggers when an extension method on `IWitness<T>` or `IWitness` calls `witness.Logger.LogXxx(...)` with a string template or `$"..."` interpolation.
-- Severity: `Info` by default; can be promoted via .editorconfig.
-- Ships with a code-fix that scaffolds a `partial` extension method on `ILogger<T>` annotated `[LoggerMessage(...)]` and rewrites the call site.
-- Primary value on **net8.0** where the interceptor is not available.
+Triggers on `witness.Logger.LogXxx(...)` calls with string templates inside `IWitness`/`IWitness<T>` extension methods. Severity: `Info` (configurable via `.editorconfig`). Ships with a code-fix that scaffolds a `[LoggerMessage]` partial method. Primary value on **net8.0** where the interceptor is absent.
 
 ### 2. Interceptor-based transparent `[LoggerMessage]` optimization (net9.0+/net10.0)
 
-A source-generator interceptor that:
-1. Detects `witness.Logger.LogXxx(...)` calls inside extension methods on `IWitness<T>`.
-2. At compile time, transparently rewrites these calls to `[LoggerMessage]`-equivalent allocation-free code.
-3. The consumer writes natural `ILogger` calls and gets optimized output without knowing or caring about `[LoggerMessage]`.
+A source-generator interceptor that transparently rewrites `witness.Logger.LogXxx(...)` calls inside `IWitness<T>` extension methods to allocation-free `[LoggerMessage]`-equivalent code at compile time — consumers write natural `ILogger` calls, no `[LoggerMessage]` attributes required.
 
 **Net8.0 behavior**: standard `ILogger` path (no interception). `WS0001` code-fix offers manual optimization.
 **Net9.0+/net10.0 behavior**: interceptor auto-optimizes. `WS0001` is suppressed for intercepted call sites.
@@ -301,16 +295,8 @@ Implementation: a `FakeLogger`-style in-memory logger (compatible with `Microsof
 
 GitHub Actions. Workflows:
 
-- **`build.yml`** — runs on PR and push to `main`:
-  - Restore, build, test on a matrix of `{ net8.0, net10.0 } × { ubuntu-latest, windows-latest }`.
-  - Run analyzer tests, code-fix tests.
-  - Publish AOT sample build (`net10.0`, linux) and fail on AOT warnings.
-  - Pack all NuGets with SourceLink + deterministic builds + `.snupkg` symbols.
-  - Upload packed `.nupkg`/`.snupkg` as build artifacts (no publish).
-- **`release.yml`** — triggers on git tag `v*`:
-  - Re-pack (deterministic) and **publish to NuGet.org** using `NUGET_API_KEY` secret.
-  - Create a GitHub Release with auto-generated notes.
-  - Versions derived from tag via `MinVer` or `nbgv`; no manual `<Version>` in csproj.
+- **`build.yml`** — runs on PR and push to `main`: build + test matrix `{ net8.0, net10.0 } × { ubuntu-latest, windows-latest }`; AOT sample build (`net10.0`, linux) failing on AOT warnings; NuGet pack with SourceLink + `.snupkg` symbols; upload artifacts.
+- **`release.yml`** — triggers on git tag `v*`: re-pack (deterministic) + publish to NuGet.org (`NUGET_API_KEY`), GitHub Release with auto-generated notes. Versions derived from tag via MinVer/nbgv — no manual `<Version>` in csproj.
 
 Branch model: trunk-based on `main`. Tags `v0.1.0`, `v0.1.1`, … cut releases.
 
@@ -328,22 +314,10 @@ Branch model: trunk-based on `main`. Tags `v0.1.0`, `v0.1.1`, … cut releases.
 
 ## Docs
 
-- **README.md** at repo root:
-  - 30-second quickstart.
-  - Concepts: `IWitness<T>`, `WitnessedAction`, lean-defaults philosophy.
-  - Configuration reference (options + builder).
-  - Recipes section: noise-filtering health checks, fast-SQL filtering, `[LoggerMessage]` patterns, Azure Monitor wiring.
-  - Testing recipes (using `WitnessSharp.Testing`).
-  - AOT notes.
-- **Per-package README** (shown on NuGet.org).
-- No DocFX site at v1; revisit once adoption justifies the maintenance cost.
+- **README.md** at repo root: 30-second quickstart, concepts (`IWitness<T>`, `WitnessedAction`, lean-defaults philosophy), configuration reference, recipes (health-check / SQL filtering, Azure Monitor, `[LoggerMessage]`), testing, AOT notes.
+- **Per-package README** (shown on NuGet.org). No DocFX site at v1; revisit once adoption justifies the maintenance cost.
 
-OSS housekeeping to ship at v1:
-- `LICENSE` (MIT).
-- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
-- `CONTRIBUTING.md` — how to build, test, where to file bugs.
-- `.github/ISSUE_TEMPLATE/` — bug, feature.
-- `.github/PULL_REQUEST_TEMPLATE.md`.
+OSS housekeeping at v1: `LICENSE` (MIT), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `CONTRIBUTING.md` (build/test/filing bugs), `.github/ISSUE_TEMPLATE/` (bug + feature), `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ---
 
@@ -351,21 +325,13 @@ OSS housekeeping to ship at v1:
 
 Captured here so we don't lose context.
 
-1. **`WitnessedAction` extensibility/notification shape.**
-   - *Problem:* events (`OnSuccess`/`OnFailure`/`OnComplete`) were considered but are leak-prone (handler accumulation, swallowed exceptions) and not idiomatic for observability tooling.
-   - *Decision:* ship v1 **without** lifecycle events — `WitnessedAction` is a pure primitive.
-   - *Post-v1 candidates:* `IWitnessedActionObserver` registered at construction, or `Func<WitnessedAction, ValueTask>` completion callback. Design should preserve "primitive that users compose on top of" intent.
+1. **`WitnessedAction` extensibility.** Lifecycle events (`OnSuccess`/`OnFailure`/`OnComplete`) were ruled out (leak-prone, not idiomatic for observability). Post-v1 candidates: `IWitnessedActionObserver` registered at construction, or `Func<WitnessedAction, ValueTask>` completion callback.
 
 2. **Brand name.** — *Resolved 2026-05-20.* The package family is `WitnessSharp` (with `.AzureMonitor`, `.Analyzers`, `.Testing`). Internal types drop the `Sharp` suffix per the RestSharp / NHibernate convention (`IWitness<T>`, `Witness<T>`, `WitnessedAction`, `IWitnessFactory`, `WitnessOptions`, `IWitnessBuilder`, `TestWitness<T>`). Config section binds from `Witness`. Diagnostic ID prefix is `WS`.
 
-3. **Custom processors package.**
-   - *Context:* v1 ships no custom OTel processors. Consumers use OTel native filtering.
-   - *Future:* if common filtering patterns emerge (health checks, fast SQL), a complementary `WitnessSharp.Processors` package can be added.
+3. **Custom processors package.** Post-v1 if demand emerges for common filtering patterns (health checks, SQL). In v1, consumers use OTel native filtering.
 
-4. **SqlClient / EntityFrameworkCore instrumentation sub-packages.**
-   - *Context:* the original PLAN listed `WithSqlClientInstrumentation` and `WithEntityFrameworkCoreInstrumentation` on the core fluent builder. Pulling those instrumentations into the core would force `Microsoft.Data.SqlClient` and `Microsoft.EntityFrameworkCore.Relational` as transitive dependencies on every consumer, conflicting with the hexagonal "core is lean" principle.
-   - *Decision (2026-05-20):* ship them as separate sub-packages (`WitnessSharp.Instrumentation.SqlClient`, `WitnessSharp.Instrumentation.EntityFrameworkCore`) when demand warrants. Each contributes its own `WithX()` extension on `IWitnessBuilder`.
-   - *Trigger:* a real consumer asks for them, or v1 of either OTel-contrib package goes stable.
+4. **SqlClient / EFCore instrumentation sub-packages.** Kept out of core to avoid forcing `Microsoft.Data.SqlClient` / `Microsoft.EntityFrameworkCore.Relational` as transitive deps. When demand warrants, ship as `WitnessSharp.Instrumentation.SqlClient` / `.EntityFrameworkCore`, each contributing a `WithX()` extension on `IWitnessBuilder`.
 
 ---
 
