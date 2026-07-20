@@ -307,22 +307,7 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 <details>
 <summary>Add custom resource attributes</summary>
 
-You can add shared metadata once and have it show up on logs, metrics, and traces.
-
-```json
-{
-  "Witness": {
-    "ServiceName": "orders-api",
-    "AdditionalResourceAttributes": {
-      "service.owner": "checkout",
-      "cloud.region": "westeurope",
-      "deployment.ring": "blue"
-    }
-  }
-}
-```
-
-You can do the same in code if you prefer:
+Additional resource attributes appear on all three signals. To set them in `appsettings.json`, see the configuration reference above. To set them in code:
 
 ```csharp
 builder.Services.AddWitness(options =>
@@ -370,14 +355,7 @@ public class OrderServiceTests
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. Its first rule, `WS0001`, flags `witness.Logger.LogInformation(...)`, `witness.Logger.LogWarning(...)`, and `witness.Logger.Log(LogLevel, ...)` calls inside `IWitness` or `IWitness<T>` extension methods such as:
-
-```csharp
-public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-```
-
-That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
+`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. `WS0001` flags templated `ILogger` calls inside `IWitness<T>` extension methods (the pattern shown in [Logging via extension methods](#logging-via-extension-methods)). Hot paths benefit from the `LoggerMessage` source generator; `WS0001` surfaces the opportunity and includes a code fix for the rewrite.
 
 ### Install the analyzer
 
