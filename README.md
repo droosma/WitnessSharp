@@ -37,29 +37,19 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main thing you inject. It bundles:
+`IWitness<T>` is the main injectable — it bundles `ILogger<T>`, `Meter`, and `ActivitySource`. No new abstractions; the underlying .NET types stay visible and accessible.
 
-- `ILogger<T>` for logs
-- `Meter` for metrics
-- `ActivitySource` for traces
-
-That shape keeps constructors short and keeps related observability tools together. It also avoids inventing new logging or metrics abstractions. If you already know the built-in .NET types, you already know most of WitnessSharp.
-
-Most classes only need `IWitness<T>`. If you need a typed witness for a type discovered at runtime, inject `IWitnessFactory` and call `Create<T>()`.
+Most classes only need `IWitness<T>`. For witnesses created at runtime, inject `IWitnessFactory` and call `Create<T>()`.
 
 ### `WitnessedAction`
 
 `WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
 
-Outcomes are explicit:
-
-- success is the default
-- `Failed(Exception)` or `Failed(string)` marks the action as a failure
-- `Cancelled()` marks it as cancelled
+Outcomes are explicit: success is the default; `Failed(Exception)` or `Failed(string)` marks failure; `Cancelled()` marks cancellation.
 
 `Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
 
-When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`. That means the same `IWitness<T>` extension methods you call on a witness (such as logging helpers) can be called directly on the action, keeping a single operation's call site consistent:
+When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`, so extension methods work directly on it:
 
 ```csharp
 public async Task<DashboardSummary> RetrieveSummaryAsync()
@@ -307,22 +297,7 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 <details>
 <summary>Add custom resource attributes</summary>
 
-You can add shared metadata once and have it show up on logs, metrics, and traces.
-
-```json
-{
-  "Witness": {
-    "ServiceName": "orders-api",
-    "AdditionalResourceAttributes": {
-      "service.owner": "checkout",
-      "cloud.region": "westeurope",
-      "deployment.ring": "blue"
-    }
-  }
-}
-```
-
-You can do the same in code if you prefer:
+`AdditionalResourceAttributes` adds shared metadata to logs, metrics, and traces. To set it in code:
 
 ```csharp
 builder.Services.AddWitness(options =>
@@ -370,14 +345,7 @@ public class OrderServiceTests
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. Its first rule, `WS0001`, flags `witness.Logger.LogInformation(...)`, `witness.Logger.LogWarning(...)`, and `witness.Logger.Log(LogLevel, ...)` calls inside `IWitness` or `IWitness<T>` extension methods such as:
-
-```csharp
-public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-```
-
-That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
+`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. `WS0001` flags `witness.Logger.Log*(...)` calls inside `IWitness<T>` extension methods and provides a code fix that rewrites them to `[LoggerMessage]` for allocation-free structured logging. See the [WS0001 rule documentation](docs/rules/WS0001.md) for the full fix pattern.
 
 ### Install the analyzer
 
@@ -389,25 +357,6 @@ dotnet add package WitnessSharp.Analyzers
 
 ```ini
 dotnet_diagnostic.WS0001.severity = warning
-```
-
-### The `LoggerMessage` pattern it promotes
-
-```csharp
-public static partial class OrderLogs
-{
-    [LoggerMessage(
-        EventId = 1001,
-        Level = LogLevel.Information,
-        Message = "Order {OrderId} placed")]
-    public static partial void OrderPlaced(this ILogger logger, int orderId);
-}
-
-public static class OrderServiceWitnessExtensions
-{
-    public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-        witness.Logger.OrderPlaced(orderId);
-}
 ```
 
 For background on source-generated logging, see the official [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
