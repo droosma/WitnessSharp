@@ -37,19 +37,13 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main injectable — it bundles `ILogger<T>`, `Meter`, and `ActivitySource`. No new abstractions; the underlying .NET types stay visible and accessible.
-
-Most classes only need `IWitness<T>`. For witnesses created at runtime, inject `IWitnessFactory` and call `Create<T>()`.
+`IWitness<T>` is the main injectable — it bundles `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions over them. Most classes only need `IWitness<T>`; for witnesses created at runtime, inject `IWitnessFactory` and call `Create<T>()`.
 
 ### `WitnessedAction`
 
-`WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
+`WitnessedAction` wraps an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose when the operation ends. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed. `Finish()` stops recording early without disposing the wrapper.
 
-Outcomes are explicit: success is the default; `Failed(Exception)` or `Failed(string)` marks failure; `Cancelled()` marks cancellation.
-
-`Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
-
-When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`, so extension methods work directly on it:
+When started from a typed `IWitness<T>`, the action also implements `IWitness<T>`, so extension methods resolve directly:
 
 ```csharp
 public async Task<DashboardSummary> RetrieveSummaryAsync()
@@ -84,13 +78,6 @@ public static class OrderServiceWitnessExtensions
 ```
 
 The optional analyzer package spots these patterns and nudges you toward `LoggerMessage` where it pays off.
-
-### Design philosophy
-
-- Lean defaults. Nothing is enabled unless you opt in.
-- Fluent setup. Start with `AddWitness()`, then add instrumentations and exporters you actually want.
-- Native .NET first. WitnessSharp does not hide `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, or OpenTelemetry builders.
-- One injectable per call site. Logs, metrics, and traces stay together.
 
 ## Installation
 
@@ -346,12 +333,6 @@ public class OrderServiceTests
 ## Analyzer (`WS0001`)
 
 `WitnessSharp.Analyzers` is an optional Roslyn analyzer package. `WS0001` flags `witness.Logger.Log*(...)` calls inside `IWitness<T>` extension methods and provides a code fix that rewrites them to `[LoggerMessage]` for allocation-free structured logging. See the [WS0001 rule documentation](docs/rules/WS0001.md) for the full fix pattern.
-
-### Install the analyzer
-
-```bash
-dotnet add package WitnessSharp.Analyzers
-```
 
 ### Configure severity in `.editorconfig`
 
