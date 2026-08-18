@@ -1,0 +1,111 @@
+name: Auto-merge documentation PRs
+
+on:
+  workflow_run:
+    workflows: ["Documentation Unbloat"]
+    types: [completed]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-documentation-prs
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge eligible documentation PRs
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const documentationExtensions = new Set([
+              ".adoc",
+              ".md",
+              ".mdx",
+              ".rst",
+              ".txt",
+            ]);
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: "open",
+              sort: "created",
+              direction: "desc",
+              per_page: 100,
+            });
+
+            for (const pull of pulls) {
+              const labels = new Set(pull.labels.map(label => label.name));
+              const isEligible =
+                pull.user.login === "github-actions[bot]" &&
+                pull.head.repo?.full_name === `${owner}/${repo}` &&
+                pull.title.startsWith("[docs] ") &&
+                labels.has("documentation") &&
+                labels.has("automation");
+
+              if (!isEligible) {
+                continue;
+              }
+
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: pull.number,
+                per_page: 100,
+              });
+              const isDocumentationOnly =
+                files.length > 0 &&
+                files.every(file => {
+                  const extension = file.filename.slice(file.filename.lastIndexOf("."));
+                  return documentationExtensions.has(extension.toLowerCase());
+                });
+
+              if (!isDocumentationOnly) {
+                core.warning(`Skipping PR #${pull.number}: it changes non-documentation files.`);
+                continue;
+              }
+
+              if (pull.draft) {
+                await github.graphql(`
+                  mutation($pullRequestId: ID!) {
+                    markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+                      pullRequest {
+                        number
+                      }
+                    }
+                  }
+                `, {
+                  pullRequestId: pull.node_id,
+                });
+              }
+
+              try {
+                const result = await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: pull.number,
+                  merge_method: "squash",
+                });
+
+                if (!result.data.merged) {
+                  core.warning(`PR #${pull.number} was not merged: ${result.data.message}`);
+                }
+              } catch (error) {
+                if ([405, 409, 422].includes(error.status)) {
+                  core.warning(`PR #${pull.number} was not mergeable: ${error.message}`);
+                  continue;
+                }
+
+                throw error;
+              }
+            }
