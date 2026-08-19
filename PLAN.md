@@ -230,11 +230,11 @@ Lean default: **do not** call `LoggingBuilder.ClearProviders()`. The package add
 - Hardcoded `"sage"` service namespace default.
 - Hardcoded source filters `"Taqa.*"`, `"Azure.*"` (consumers add their own sources via `.ConfigureTracing(b => b.AddSource(...))`).
 - Hardcoded health-check paths and SQL thresholds.
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` — **no custom processors in v1**. Moved to a README "Recipes" section with copy-paste, fully parameterized examples. A complementary package may be added later.
-- `implicit operator ResourceBuilder` — surprising; gone.
-- `services.UseOpenTelemetry(...)` — replaced with `AddWitness(...)` to match .NET conventions.
-- `IWitness<T>.ForType<TNew>()` — replaced by `IWitnessFactory` (clean SOLID separation).
-- `WitnessedAction` lifecycle events (`OnSuccess`/`OnFailure`/`OnCancelled`/`OnComplete`) — deferred to post-v1.
+- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` — no custom processors in v1; recipes in README instead.
+- `implicit operator ResourceBuilder`
+- `services.UseOpenTelemetry(...)` — replaced with `AddWitness(...)`.
+- `IWitness<T>.ForType<TNew>()` — replaced by `IWitnessFactory`.
+- `WitnessedAction` lifecycle events — deferred to post-v1.
 
 ---
 
@@ -244,20 +244,11 @@ Separate NuGet package. Users opt in.
 
 **v1 ships two capabilities:**
 
-### 1. Diagnostic rule: `WS0001 — Prefer [LoggerMessage] for log calls in IWitness<T> extension methods`
+**`WS0001`** — triggers on `witness.Logger.LogXxx(...)` calls with constant templates inside `IWitness<T>` extension methods. Severity: `Info` (configurable via `.editorconfig`). Ships with a code-fix that scaffolds a `[LoggerMessage]` partial method.
 
-Triggers on `witness.Logger.LogXxx(...)` calls with string templates inside `IWitness`/`IWitness<T>` extension methods. Severity: `Info` (configurable via `.editorconfig`). Ships with a code-fix that scaffolds a `[LoggerMessage]` partial method. Primary value on **net8.0** where the interceptor is absent.
+On **net8.0**: standard `ILogger` path; the code-fix enables manual optimization. On **net9.0+/net10.0**: a source-generator interceptor auto-rewrites these calls to allocation-free `[LoggerMessage]`-equivalent code, suppressing `WS0001` for intercepted sites. Consumers write natural `ILogger` calls — no attributes required. This interceptor is **core to the package's value proposition**.
 
-### 2. Interceptor-based transparent `[LoggerMessage]` optimization (net9.0+/net10.0)
-
-A source-generator interceptor that transparently rewrites `witness.Logger.LogXxx(...)` calls inside `IWitness<T>` extension methods to allocation-free `[LoggerMessage]`-equivalent code at compile time — consumers write natural `ILogger` calls, no `[LoggerMessage]` attributes required.
-
-**Net8.0 behavior**: standard `ILogger` path (no interception). `WS0001` code-fix offers manual optimization.
-**Net9.0+/net10.0 behavior**: interceptor auto-optimizes. `WS0001` is suppressed for intercepted call sites.
-
-This interceptor is **core to the package's value proposition** — it delivers "zero ceremony, zero overhead" structured logging.
-
-Future rules (not in v1): `WitnessedAction` must be in a `using`, `ActivitySource.StartActivity` name should be const-evaluable, avoid raw `Logger`/`ActivitySource`/`Meter` outside extension methods or test code, etc.
+Future rules (not in v1): `WitnessedAction` must be in a `using`, `ActivitySource.StartActivity` name const-evaluable, avoid raw primitives outside extension methods or test code.
 
 ---
 
@@ -304,11 +295,7 @@ Branch model: trunk-based on `main`. Tags `v0.1.0`, `v0.1.1`, … cut releases.
 
 ## Sample app
 
-`samples/SampleWebApi` — minimal ASP.NET Core API:
-- Calls `services.AddWitness(builder.Configuration.GetSection("Witness")).WithStandardInstrumentations().WithOtlpExporter().WithConsoleExporter();`
-- One controller demonstrating: an injected `IWitness<HomeController>`, a `StartAction("Lookup")` block with tagging + `Failed(ex)`, and an extension method on `IWitness<HomeController>` using `[LoggerMessage]`.
-- `appsettings.json` showing config binding.
-- `README.md` with `docker compose up` for an OTLP collector + Jaeger so the sample is end-to-end runnable.
+`samples/SampleWebApi` — minimal ASP.NET Core API demonstrating `IWitness<T>`, `StartAction`, tagging, `Failed(ex)`, and `[LoggerMessage]` extension methods with OTLP + console exporters. `docker compose up` provides Jaeger for end-to-end traces. See [`samples/SampleWebApi/README.md`](samples/SampleWebApi/README.md).
 
 ---
 
@@ -327,7 +314,7 @@ Captured here so we don't lose context.
 
 1. **`WitnessedAction` extensibility.** Lifecycle events (`OnSuccess`/`OnFailure`/`OnComplete`) were ruled out (leak-prone, not idiomatic for observability). Post-v1 candidates: `IWitnessedActionObserver` registered at construction, or `Func<WitnessedAction, ValueTask>` completion callback.
 
-2. **Brand name.** — *Resolved 2026-05-20.* The package family is `WitnessSharp` (with `.AzureMonitor`, `.Analyzers`, `.Testing`). Internal types drop the `Sharp` suffix per the RestSharp / NHibernate convention (`IWitness<T>`, `Witness<T>`, `WitnessedAction`, `IWitnessFactory`, `WitnessOptions`, `IWitnessBuilder`, `TestWitness<T>`). Config section binds from `Witness`. Diagnostic ID prefix is `WS`.
+2. **Brand name.** — *Resolved 2026-05-20.* Package family is `WitnessSharp`; internal types drop the `Sharp` suffix. Config section: `Witness`. Diagnostic prefix: `WS`.
 
 3. **Custom processors package.** Post-v1 if demand emerges for common filtering patterns (health checks, SQL). In v1, consumers use OTel native filtering.
 
