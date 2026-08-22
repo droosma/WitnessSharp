@@ -42,10 +42,10 @@ All production code is written test-first. The workflow is:
 
 ### Quality Gates — enforced before moving to any next step
 
-- **100% code coverage** — of code in this repo. Validated via coverage tooling. No new code is considered complete until coverage is verified at 100%.
-- **Mutation testing (Stryker)** — run after tests pass on core/testing/AzureMonitor packages. Surviving mutants must be addressed before moving on. This ensures tests validate behavior, not just execute lines.
-- **Analyzer package**: the Roslyn test harness inherently validates behavior (assertions are "this code produces diagnostic X at location Y"). Stryker is not required here — the harness already guarantees behavioral testing.
-- **All tests green** — no skipped or ignored tests left behind.
+- **100% code coverage** — validated via coverage tooling. No code is complete until verified.
+- **Mutation testing (Stryker)** — run on core/testing/AzureMonitor packages after tests pass. Surviving mutants must be addressed; this validates behavior, not just line coverage.
+- **Analyzer package**: Stryker not required — the Roslyn test harness guarantees behavioral testing via diagnostic assertions.
+- **All tests green** — no skipped or ignored tests.
 
 ### DDD (Domain-Driven Design)
 
@@ -57,8 +57,6 @@ Use ports-and-adapters separation where called for:
 - **Core/domain** — pure abstractions and logic (`IWitness<T>`, `WitnessedAction`, options).
 - **Ports** — interfaces defining what the core needs (e.g., `IWitnessBuilder` as a configuration port).
 - **Adapters** — implementations wiring to infrastructure (OTel SDK, Azure Monitor, DI registration).
-
-The separate packages naturally enforce this: `WitnessSharp` is the core, `WitnessSharp.AzureMonitor` is an adapter.
 
 ## Architecture
 
@@ -130,9 +128,7 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 
 ### Versioning
 
-- Central package management via `Directory.Packages.props`.
-- Version derived from git tags via MinVer/nbgv — no manual `<Version>` in csproj files.
-- SemVer starting at `0.1.0`.
+Central package management via `Directory.Packages.props`. Version derived from git tags via MinVer/nbgv — no manual `<Version>` in csproj files. SemVer starting at `0.1.0`.
 
 ### No custom processors in v1
 
@@ -140,14 +136,13 @@ No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel 
 
 ### What was intentionally dropped from the reference implementation
 
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
+From `Taqa.OpenTelemetry`, **not** ported:
+- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`), health-check paths, and SQL thresholds.
 - `implicit operator ResourceBuilder`.
 - `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
+- Custom OTel processors (`SqlFilteringProcessor`, `HealthCheckFilteringProcessor`) → README recipes instead.
+- `ForType<TNew>()` on interface → `IWitnessFactory`.
+- `WitnessedAction` lifecycle events → deferred to post-v1.
 
 ## Reference Implementation
 
