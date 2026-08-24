@@ -37,19 +37,13 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main thing you inject. It bundles `ILogger<T>`, `Meter`, and `ActivitySource`, keeping constructors short without hiding the standard .NET types.
-
-Most classes only need `IWitness<T>`. If you need a typed witness for a type discovered at runtime, inject `IWitnessFactory` and call `Create<T>()`.
+`IWitness<T>` is the main injectable — it bundles `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions over them. Most classes only need `IWitness<T>`; for witnesses created at runtime, inject `IWitnessFactory` and call `Create<T>()`.
 
 ### `WitnessedAction`
 
-`WitnessedAction` is a small wrapper around an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose it when the operation ends.
+`WitnessedAction` wraps an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose when the operation ends. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed. `Finish()` stops recording early without disposing the wrapper.
 
-Outcomes are explicit: success is the default; `Failed(Exception)`, `Failed(string)`, or `Cancelled()` marks other outcomes.
-
-`Dispose()` sets the final activity status and closes the activity. `Finish()` is also available when you need to stop early without disposing the wrapper yet.
-
-When started from a typed `IWitness<T>`, the action is itself an `IWitness<T>`. That means the same `IWitness<T>` extension methods you call on a witness (such as logging helpers) can be called directly on the action, keeping a single operation's call site consistent:
+When started from a typed `IWitness<T>`, the action also implements `IWitness<T>`, so extension methods resolve directly:
 
 ```csharp
 public async Task<DashboardSummary> RetrieveSummaryAsync()
@@ -335,25 +329,6 @@ public static void LogOrderPlaced(this IWitness<OrderService> witness, int order
 That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
 
 Install with `dotnet add package WitnessSharp.Analyzers`. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`.
-
-### The `LoggerMessage` pattern it promotes
-
-```csharp
-public static partial class OrderLogs
-{
-    [LoggerMessage(
-        EventId = 1001,
-        Level = LogLevel.Information,
-        Message = "Order {OrderId} placed")]
-    public static partial void OrderPlaced(this ILogger logger, int orderId);
-}
-
-public static class OrderServiceWitnessExtensions
-{
-    public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-        witness.Logger.OrderPlaced(orderId);
-}
-```
 
 For background on source-generated logging, see the official [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 

@@ -10,8 +10,6 @@ From the repository root:
 dotnet run --project samples/SampleWebApi/SampleWebApi.csproj
 ```
 
-Then call the API:
-
 ```bash
 curl "http://localhost:5053/api/weather?city=Amsterdam"
 curl "http://localhost:5053/api/weather?city=fail"
@@ -27,12 +25,7 @@ From `samples/SampleWebApi`:
 docker compose up
 ```
 
-This starts:
-- the sample API on `http://localhost:8080`
-- an OpenTelemetry Collector on `http://localhost:4317`
-- Jaeger UI on `http://localhost:16686`
-
-After startup, request:
+This starts the sample API (`http://localhost:8080`), an OTLP Collector (`http://localhost:4317`), and Jaeger UI (`http://localhost:16686`).
 
 ```bash
 curl "http://localhost:8080/api/weather?city=Amsterdam"
