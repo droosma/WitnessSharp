@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 namespace WitnessSharp.Tests;
 
@@ -212,8 +214,8 @@ public class WitnessServiceCollectionExtensionsTests
             Console.SetOut(output);
             using (var sp = services.BuildServiceProvider())
             {
-                Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Trace.TracerProvider>());
-                Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Metrics.MeterProvider>());
+                var tracer = sp.GetRequiredService<TracerProvider>();
+                var meterProvider = sp.GetRequiredService<MeterProvider>();
                 var witness = sp.GetRequiredService<IWitness<Subject>>();
                 var counter = witness.Meter.CreateCounter<long>("integration.runs");
                 using (var action = witness.StartAction("integration.operation"))
@@ -221,6 +223,9 @@ public class WitnessServiceCollectionExtensionsTests
                     counter.Add(1);
                     Assert.NotNull(action.Activity);
                 }
+
+                Assert.True(tracer.ForceFlush());
+                Assert.True(meterProvider.ForceFlush());
             }
 
             Assert.Contains("integration.operation", output.ToString());
