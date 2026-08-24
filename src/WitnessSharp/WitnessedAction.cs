@@ -23,10 +23,10 @@ public class WitnessedAction : IDisposable
     /// <c>Failure</c>.
     /// </summary>
     private static readonly Action<WitnessedAction> _defaultOnFailure = action =>
-                                                                       {
-                                                                           action.Activity?.SetTag(OutcomeTagName, nameof(WitnessedOutcome.Failure));
-                                                                           action.Activity?.SetStatus(ActivityStatusCode.Error);
-                                                                       };
+    {
+        action.Activity?.SetTag(OutcomeTagName, nameof(WitnessedOutcome.Failure));
+        action.Activity?.SetStatus(ActivityStatusCode.Error);
+    };
 
     /// <summary>
     /// The default <see cref="OnCancelled"/> behaviour: sets the activity status to
@@ -106,7 +106,7 @@ public class WitnessedAction : IDisposable
     /// <returns>The same instance, to allow chaining.</returns>
     public WitnessedAction AddEvent(string name, ActivityTagsCollection? tags = null)
     {
-        Activity?.AddEvent(new ActivityEvent(name, tags:tags));
+        Activity?.AddEvent(new ActivityEvent(name, tags: tags));
         return this;
     }
 
@@ -118,7 +118,7 @@ public class WitnessedAction : IDisposable
     public void Failed(Exception? exception = null)
     {
         Outcome = WitnessedOutcome.Failure;
-        if(exception is not null)
+        if (exception is not null)
         {
             RecordException(exception);
         }
@@ -133,10 +133,10 @@ public class WitnessedAction : IDisposable
     {
         Outcome = WitnessedOutcome.Failure;
         Activity?.AddEvent(new ActivityEvent("exception",
-                                             tags:new ActivityTagsCollection
-                                                  {
-                                                      {"exception.message", reason},
-                                                  }));
+            tags: new ActivityTagsCollection
+            {
+                { "exception.message", reason },
+            }));
     }
 
     /// <summary>Marks the operation as cancelled.</summary>
@@ -151,12 +151,12 @@ public class WitnessedAction : IDisposable
         Activity?.AddException(exception);
 #else
         Activity?.AddEvent(new ActivityEvent("exception",
-                                             tags:new ActivityTagsCollection
-                                                  {
-                                                      {"exception.type", exception.GetType().FullName},
-                                                      {"exception.message", exception.Message},
-                                                      {"exception.stacktrace", exception.ToString()},
-                                                  }));
+            tags: new ActivityTagsCollection
+            {
+                { "exception.type", exception.GetType().FullName },
+                { "exception.message", exception.Message },
+                { "exception.stacktrace", exception.ToString() },
+            }));
 #endif
     }
 }
