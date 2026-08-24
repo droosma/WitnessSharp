@@ -79,6 +79,10 @@ public static class OrderServiceWitnessExtensions
 
 The optional analyzer package spots these patterns and nudges you toward `LoggerMessage` where it pays off.
 
+### Design philosophy
+
+Lean defaults — nothing enabled unless you opt in. Start with `AddWitness()` and add what you want. `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, and OpenTelemetry builders stay exposed. One injectable per call site keeps logs, metrics, and traces together.
+
 ## Installation
 
 ```bash
@@ -281,23 +285,6 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 
 </details>
 
-<details>
-<summary>Add custom resource attributes</summary>
-
-`AdditionalResourceAttributes` adds shared metadata to logs, metrics, and traces. To set it in code:
-
-```csharp
-builder.Services.AddWitness(options =>
-{
-    options.ServiceName = "orders-api";
-    options.AdditionalResourceAttributes["service.owner"] = "checkout";
-    options.AdditionalResourceAttributes["cloud.region"] = "westeurope";
-    options.AdditionalResourceAttributes["deployment.ring"] = "blue";
-});
-```
-
-</details>
-
 ## Testing
 
 `WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records logged messages, metrics, and activities. It includes `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
@@ -332,13 +319,16 @@ public class OrderServiceTests
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. `WS0001` flags `witness.Logger.Log*(...)` calls inside `IWitness<T>` extension methods and provides a code fix that rewrites them to `[LoggerMessage]` for allocation-free structured logging. See the [WS0001 rule documentation](docs/rules/WS0001.md) for the full fix pattern.
+`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. Its first rule, `WS0001`, flags `witness.Logger.LogInformation(...)`, `witness.Logger.LogWarning(...)`, and `witness.Logger.Log(LogLevel, ...)` calls inside `IWitness` or `IWitness<T>` extension methods such as:
 
-### Configure severity in `.editorconfig`
-
-```ini
-dotnet_diagnostic.WS0001.severity = warning
+```csharp
+public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
+    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
 ```
+
+That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
+
+Install with `dotnet add package WitnessSharp.Analyzers`. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`.
 
 For background on source-generated logging, see the official [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
