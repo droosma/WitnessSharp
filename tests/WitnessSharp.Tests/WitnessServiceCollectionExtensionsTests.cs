@@ -196,6 +196,23 @@ public class WitnessServiceCollectionExtensionsTests
         Assert.Equal("1.0.0", attrs["service.version"]);
         Assert.Equal("i-42", attrs["service.instance.id"]);
     }
+
+    [Fact]
+    public void AddWitness_subscribes_tracing_and_metrics_to_the_service_name()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddWitness(opts => opts.ServiceName = "integration-svc")
+            .WithConsoleExporter();
+
+        using var sp = services.BuildServiceProvider();
+        Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Trace.TracerProvider>());
+        Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Metrics.MeterProvider>());
+        var witness = sp.GetRequiredService<IWitness<Subject>>();
+        using var action = witness.StartAction("integration.operation");
+
+        Assert.NotNull(action.Activity);
+    }
 }
 
 /// <summary>
