@@ -205,13 +205,31 @@ public class WitnessServiceCollectionExtensionsTests
         services.AddWitness(opts => opts.ServiceName = "integration-svc")
             .WithConsoleExporter();
 
-        using var sp = services.BuildServiceProvider();
-        Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Trace.TracerProvider>());
-        Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Metrics.MeterProvider>());
-        var witness = sp.GetRequiredService<IWitness<Subject>>();
-        using var action = witness.StartAction("integration.operation");
+        var output = new StringWriter();
+        var originalOutput = Console.Out;
+        try
+        {
+            Console.SetOut(output);
+            using (var sp = services.BuildServiceProvider())
+            {
+                Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Trace.TracerProvider>());
+                Assert.NotNull(sp.GetRequiredService<OpenTelemetry.Metrics.MeterProvider>());
+                var witness = sp.GetRequiredService<IWitness<Subject>>();
+                var counter = witness.Meter.CreateCounter<long>("integration.runs");
+                using (var action = witness.StartAction("integration.operation"))
+                {
+                    counter.Add(1);
+                    Assert.NotNull(action.Activity);
+                }
+            }
 
-        Assert.NotNull(action.Activity);
+            Assert.Contains("integration.operation", output.ToString());
+            Assert.Contains("integration.runs", output.ToString());
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
     }
 }
 
