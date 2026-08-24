@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 namespace WitnessSharp.Tests;
 
@@ -195,6 +197,44 @@ public class WitnessServiceCollectionExtensionsTests
         Assert.Equal("team", attrs["service.namespace"]);
         Assert.Equal("1.0.0", attrs["service.version"]);
         Assert.Equal("i-42", attrs["service.instance.id"]);
+    }
+
+    [Fact]
+    public void AddWitness_subscribes_tracing_and_metrics_to_the_service_name()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddWitness(opts => opts.ServiceName = "integration-svc")
+            .WithConsoleExporter();
+
+        var output = new StringWriter();
+        var originalOutput = Console.Out;
+        try
+        {
+            Console.SetOut(output);
+            using (var sp = services.BuildServiceProvider())
+            {
+                var tracer = sp.GetRequiredService<TracerProvider>();
+                var meterProvider = sp.GetRequiredService<MeterProvider>();
+                var witness = sp.GetRequiredService<IWitness<Subject>>();
+                var counter = witness.Meter.CreateCounter<long>("integration.runs");
+                using (var action = witness.StartAction("integration.operation"))
+                {
+                    counter.Add(1);
+                    Assert.NotNull(action.Activity);
+                }
+
+                Assert.True(tracer.ForceFlush());
+                Assert.True(meterProvider.ForceFlush());
+            }
+
+            Assert.Contains("integration.operation", output.ToString());
+            Assert.Contains("integration.runs", output.ToString());
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
     }
 }
 

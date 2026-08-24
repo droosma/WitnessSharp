@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using WitnessSharp;
 
 namespace Microsoft.Extensions.DependencyInjection;
@@ -68,7 +70,9 @@ public static class WitnessServiceCollectionExtensions
         services.TryAddSingleton<IWitnessFactory, WitnessFactory>();
 
         services.AddOpenTelemetry()
-            .ConfigureResource(rb => WitnessResource.Apply(rb, options));
+            .ConfigureResource(rb => WitnessResource.Apply(rb, options))
+            .WithTracing(tracing => tracing.AddSource(options.ServiceName))
+            .WithMetrics(metrics => metrics.AddMeter(options.ServiceName));
 
         return new WitnessBuilder(services);
     }
