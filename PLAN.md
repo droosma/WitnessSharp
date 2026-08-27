@@ -1,10 +1,6 @@
 # WitnessSharp — Implementation Plan
 
-A small, opinionated .NET observability package built on OpenTelemetry. Ships:
-- A central `IWitness<T>` abstraction bundling `ILogger<T>` + `Meter` + `ActivitySource`.
-- A `WitnessedAction` primitive for user-defined operations with success/failure semantics.
-- A lean, fluent bootstrap that registers DI primitives and lets users opt in to instrumentations, exporters, and filters.
-- A Roslyn analyzer nudging users toward `[LoggerMessage]` for structured, allocation-free logging.
+A small, opinionated .NET observability package built on OpenTelemetry. Provides `IWitness<T>` (bundling `ILogger<T>` + `Meter` + `ActivitySource`), `WitnessedAction` for user-defined operations, a lean fluent bootstrap, and an optional Roslyn analyzer.
 
 Design principles, in priority order:
 1. **Open for extension, closed for modification.** Sensible defaults that users compose on top of — never replace.
@@ -213,12 +209,7 @@ public static IWitnessBuilder ClearLoggingProviders(this IWitnessBuilder builder
 
 ### Resource attributes (auto)
 
-The package adds these to `ResourceBuilder` for every consumer:
-- `service.name`, `service.namespace`, `service.version` — from options.
-- `service.instance.id` — from options or `Environment.MachineName`.
-- `telemetry.sdk.*` — added automatically by the OTel SDK.
-- `deployment.environment` — from options, falling back to `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`.
-- Anything in `AdditionalResourceAttributes`.
+The package adds `service.name`, `service.namespace`, `service.version`, `service.instance.id` (or `Environment.MachineName`), `deployment.environment` (falling back to `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`), `telemetry.sdk.*` (OTel SDK), and any keys in `AdditionalResourceAttributes` to `ResourceBuilder` for every consumer.
 
 ### Logging providers
 
@@ -226,15 +217,7 @@ Lean default: **do not** call `LoggingBuilder.ClearProviders()`. The package add
 
 ### Dropped from the current code
 
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- Hardcoded `"sage"` service namespace default.
-- Hardcoded source filters `"Taqa.*"`, `"Azure.*"` (consumers add their own sources via `.ConfigureTracing(b => b.AddSource(...))`).
-- Hardcoded health-check paths and SQL thresholds.
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` — no custom processors in v1; recipes in README instead.
-- `implicit operator ResourceBuilder`
-- `services.UseOpenTelemetry(...)` — replaced with `AddWitness(...)`.
-- `IWitness<T>.ForType<TNew>()` — replaced by `IWitnessFactory`.
-- `WitnessedAction` lifecycle events — deferred to post-v1.
+Removed from `Taqa.OpenTelemetry`: `OpenTelemetryConfiguration` record (→ options + builder), hardcoded `"sage"` namespace, `"Taqa.*"`/`"Azure.*"` source filters, health-check/SQL thresholds, `SqlFilteringProcessor`/`HealthCheckFilteringProcessor` (→ README recipes), `implicit operator ResourceBuilder`, `UseOpenTelemetry()` (→ `AddWitness()`), `ForType<TNew>()` (→ `IWitnessFactory`), and `WitnessedAction` lifecycle events (deferred post-v1).
 
 ---
 
@@ -274,11 +257,7 @@ Implementation: a `FakeLogger`-style in-memory logger (compatible with `Microsof
 
 ## AOT
 
-**Full AOT support** is a v1 commitment.
-
-- Annotate any unavoidable reflection with `[RequiresUnreferencedCode]` / `[RequiresDynamicCode]` so AOT consumers see warnings at compile time, not surprises at runtime.
-- Avoid reflection in default code paths.
-- CI runs the `SampleWebApi` with `dotnet publish -p:PublishAot=true` on `net10.0` and treats any AOT/trimming warnings as build failures.
+**Full AOT support** is a v1 commitment. Annotate unavoidable reflection with `[RequiresUnreferencedCode]` / `[RequiresDynamicCode]`, avoid reflection in default code paths, and treat AOT/trimming warnings from our code as CI failures (`dotnet publish -p:PublishAot=true` on `net10.0`).
 
 ---
 
@@ -324,13 +303,7 @@ Captured here so we don't lose context.
 
 ## Development methodology
 
-- **TDD**: all production code is written test-first (red → green → refactor).
-- **100% code coverage**: validated before moving to any next step. Covers code in this repo only.
-- **Mutation testing (Stryker)**: run on core/testing/AzureMonitor packages after tests pass. Surviving mutants must be addressed. Ensures tests validate behavior, not just execute lines.
-- **Analyzer package**: exempt from Stryker — the Roslyn test harness inherently validates behavior (assertions = "this code produces diagnostic X at location Y").
-- **DDD**: applied as a lens when domain logic emerges. Core abstractions kept free of infrastructure concerns.
-- **Hexagonal architecture**: ports (interfaces in core) and adapters (OTel/Azure wiring). The package structure enforces this naturally.
-- **AOT**: CI fails on AOT/trimming warnings from our code. Upstream OTel warnings are documented but don't fail the build.
+All production code is written test-first (TDD). 100% code coverage is validated before moving to any next step. Stryker mutation testing runs on core/testing/AzureMonitor packages after tests pass; the Roslyn test harness covers the Analyzer package (Stryker not required there). DDD and hexagonal architecture (ports in core, OTel/Azure adapters) apply where the domain warrants it. AOT/trimming warnings from our code fail CI; upstream OTel warnings are documented but do not.
 
 ---
 
