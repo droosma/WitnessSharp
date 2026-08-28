@@ -14,10 +14,8 @@ curl "http://localhost:5053/api/weather?city=fail"
 
 ## Run with Docker Compose
 
-From the `samples/SampleWebApi` directory, run `docker compose up`. This starts the API (`http://localhost:8080`), an OTLP Collector (`http://localhost:4317`), and Jaeger (`http://localhost:16686`).
+From the `samples/SampleWebApi` directory, run `docker compose up` to start the API at `http://localhost:8080` and Jaeger at `http://localhost:16686`.
 
 ```bash
 curl "http://localhost:8080/api/weather?city=Amsterdam"
 ```
-
-Open Jaeger at `http://localhost:16686` to inspect traces.
