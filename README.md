@@ -5,11 +5,7 @@
 [![Mutation testing](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/droosma/WitnessSharp/badges/.badges/mutation.json)](https://github.com/droosma/WitnessSharp/actions/workflows/build.yml)
 [![License](https://img.shields.io/github/license/droosma/WitnessSharp)](LICENSE)
 
-Lean .NET observability on OpenTelemetry. `IWitness<T>` gives each call site one place for logs, metrics, and traces.
-
-WitnessSharp keeps the underlying .NET types visible. You still work with `ILogger<T>`, `Meter`, `ActivitySource`, configuration binding, and OpenTelemetry exporters. The package just gives them a clean shape and a small bootstrap API.
-
-Supports `net8.0` and `net10.0`.
+Lean .NET observability on OpenTelemetry. `IWitness<T>` gives each call site one place for logs, metrics, and traces while keeping `ILogger<T>`, `Meter`, `ActivitySource`, and OpenTelemetry exporters directly accessible. Supports `net8.0` and `net10.0`.
 
 ## 30-second quickstart
 
@@ -31,7 +27,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 }
 ```
 
-`AddWitness()` binds `WitnessOptions` from the `"Witness"` section. Registration without any `.With*()` calls is valid if you only want the core primitives.
+`AddWitness()` binds `WitnessOptions` from the `"Witness"` section.
 
 ## Concepts
 
@@ -79,10 +75,6 @@ public static class OrderServiceWitnessExtensions
 
 The optional analyzer package spots these patterns and nudges you toward `LoggerMessage` where it pays off.
 
-### Design philosophy
-
-Lean defaults — nothing enabled unless you opt in. Start with `AddWitness()` and add what you want. `ILogger`, `Meter`, `ActivitySource`, `IConfiguration`, and OpenTelemetry builders stay exposed. One injectable per call site keeps logs, metrics, and traces together.
-
 ## Installation
 
 ```bash
@@ -129,30 +121,26 @@ builder.Services.AddWitness(options =>
 
 | Property | Description | Default |
 | --- | --- | --- |
-| `ServiceName` | Sets `service.name`. This is the main identity of your service. | Empty string. Set this in real apps. |
-| `ServiceNamespace` | Sets `service.namespace`. Useful when several services share the same base name. | `null` |
+| `ServiceName` | Sets `service.name` (the service's primary identity). | Empty string |
+| `ServiceNamespace` | Sets `service.namespace`. | `null` |
 | `ServiceVersion` | Sets `service.version`. | `null` |
 | `ServiceInstanceId` | Sets `service.instance.id`. | `Environment.MachineName` |
 | `DeploymentEnvironment` | Sets `deployment.environment`. | `DOTNET_ENVIRONMENT`, then `ASPNETCORE_ENVIRONMENT` |
-| `AdditionalResourceAttributes` | Adds any extra resource attributes you want on logs, metrics, and traces. | Empty dictionary |
+| `AdditionalResourceAttributes` | Extra resource attributes applied to all signals. | Empty dictionary |
 
 ### Fluent builder methods
 
-Registration by itself is valid. Add builder methods when you want instrumentations or exporters.
-
 | Method | What it does | Notes |
 | --- | --- | --- |
-| `WithStandardInstrumentations()` | Adds ASP.NET Core and `HttpClient` tracing instrumentation. | Good default for web apps. |
+| `WithStandardInstrumentations()` | Adds ASP.NET Core and `HttpClient` tracing instrumentation. | |
 | `WithAspNetCoreInstrumentation(...)` | Adds ASP.NET Core tracing instrumentation. | Use the overload when you need request filtering or enrichment. |
-| `WithHttpClientInstrumentation(...)` | Adds `HttpClient` tracing instrumentation. | Useful for outbound calls from services or APIs. |
+| `WithHttpClientInstrumentation(...)` | Adds `HttpClient` tracing instrumentation. | |
 | `WithOtlpExporter(...)` | Adds OTLP exporters for traces, metrics, and logs. | Good fit for OpenTelemetry Collector, Jaeger, Tempo, and similar backends. |
 | `WithConsoleExporter()` | Adds console exporters for traces, metrics, and logs. | Handy for local debugging. |
 | `WithAzureMonitor(...)` | Adds Azure Monitor exporters for traces, metrics, and logs. | Comes from `WitnessSharp.AzureMonitor`. |
 | `ClearLoggingProviders()` | Clears existing `Microsoft.Extensions.Logging` providers before OpenTelemetry logging is added. | Opt in only if you want OTel to be the only logging provider. |
 
 ### Escape hatches
-
-Use the escape hatches when the built-in convenience methods are not enough:
 
 | Method | Use it for |
 | --- | --- |
@@ -164,7 +152,7 @@ If you configure an instrumentation manually through `ConfigureTracing`, skip th
 
 ## Recipes
 
-WitnessSharp does not ship hard-coded health-check or SQL filters. Those choices depend on your app. Use the escape hatches and keep the policy in your service code.
+WitnessSharp ships no hard-coded health-check or SQL filters; use the escape hatches to add your own.
 
 <details>
 <summary>Filter out health-check spans</summary>
@@ -187,16 +175,12 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .WithOtlpExporter();
 ```
 
-This pattern is a good fit when `WithStandardInstrumentations()` is almost right, but you need a request filter.
-
 </details>
 
 <details>
 <summary>Filter fast SQL spans with a custom processor</summary>
 
-Duration-based SQL filtering is app-specific, so WitnessSharp leaves it to your tracing pipeline. This example keeps SQL spans that run for at least 100 ms and exports everything else as usual.
-
-This recipe assumes you have also installed the SQL client instrumentation package from the OpenTelemetry ecosystem.
+Duration-based SQL filtering is app-specific. This example keeps SQL spans ≥ 100 ms and exports all others normally. It assumes the SQL client instrumentation package is installed.
 
 ```csharp
 using System.Diagnostics;
@@ -287,7 +271,7 @@ See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/
 
 ## Testing
 
-`WitnessSharp.Testing` gives you `TestWitness<T>`, an in-memory test double that records logged messages, metrics, and activities. It includes `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
+`WitnessSharp.Testing` provides `TestWitness<T>`, an in-memory test double with `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
 
 Example:
 
@@ -319,22 +303,11 @@ public class OrderServiceTests
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` is an optional Roslyn analyzer package. Its first rule, `WS0001`, flags `witness.Logger.LogInformation(...)`, `witness.Logger.LogWarning(...)`, and `witness.Logger.Log(LogLevel, ...)` calls inside `IWitness` or `IWitness<T>` extension methods such as:
-
-```csharp
-public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-```
-
-That pattern is convenient, but hot paths often benefit from the `LoggerMessage` source generator. `WS0001` nudges you toward moving the template into a dedicated generated method, and the package includes a code fix to help with the rewrite.
-
-Install with `dotnet add package WitnessSharp.Analyzers`. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`.
-
-For background on source-generated logging, see the official [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` (optional) adds `WS0001`, which flags templated `ILogger` calls inside `IWitness<T>` extension methods (as shown above) and suggests the `[LoggerMessage]` source generator. A code fix handles the rewrite. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See the [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator) for background.
 
 ## AOT support
 
-WitnessSharp is designed to stay friendly to trimming and native AOT. The core package uses standard .NET and OpenTelemetry APIs. Your final AOT story depends on the instrumentations and exporters you enable — when publishing with `PublishAot=true`, watch for warnings from upstream packages.
+WitnessSharp is AOT/trim-friendly. Upstream instrumentation and exporter packages may emit warnings when publishing with `PublishAot=true`.
 
 ## Package family
 
@@ -347,7 +320,7 @@ WitnessSharp is designed to stay friendly to trimming and native AOT. The core p
 
 ## Contributing
 
-Contributions are welcome. Build with `dotnet build WitnessSharp.slnx`, test with `dotnet test WitnessSharp.slnx`, then open a pull request. If a `CONTRIBUTING.md` appears, follow that file first.
+Contributions welcome. Build with `dotnet build WitnessSharp.slnx`, test with `dotnet test WitnessSharp.slnx`, then open a pull request. Follow `CONTRIBUTING.md` if present.
 
 ## License
 
@@ -357,4 +330,3 @@ MIT. See [LICENSE](LICENSE).
 
 - [OpenTelemetry for .NET](https://opentelemetry.io/docs/languages/dotnet/)
 - [Azure Monitor OpenTelemetry exporter](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme)
-- [High-performance logging with `LoggerMessage`](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator)
