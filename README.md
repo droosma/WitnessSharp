@@ -157,8 +157,6 @@ WitnessSharp ships no hard-coded health-check or SQL filters; use the escape hat
 <details>
 <summary>Filter out health-check spans</summary>
 
-Use `ConfigureTracing()` when you need to own the ASP.NET Core instrumentation options.
-
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .ConfigureTracing(tracing =>
@@ -169,7 +167,6 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
                 !httpContext.Request.Path.StartsWithSegments("/health") &&
                 !httpContext.Request.Path.StartsWithSegments("/ready");
         });
-
         tracing.AddHttpClientInstrumentation();
     })
     .WithOtlpExporter();
@@ -178,81 +175,54 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
 </details>
 
 <details>
-<summary>Filter fast SQL spans with a custom processor</summary>
+<summary>Filter spans by duration (e.g., SQL slower than 100 ms)</summary>
 
-Duration-based SQL filtering is app-specific. This example keeps SQL spans ≥ 100 ms and exports all others normally. It assumes the SQL client instrumentation package is installed.
+Create a custom processor:
 
 ```csharp
-using System.Diagnostics;
-using System.Linq;
-using OpenTelemetry;
-using OpenTelemetry.Exporter;
-using OpenTelemetry.Trace;
-
-public sealed class MinimumDurationSqlProcessor : BaseProcessor<Activity>
+public sealed class DurationFilterProcessor : BaseProcessor<Activity>
 {
-    private readonly BatchActivityExportProcessor _inner;
+    private readonly BaseExporter<Activity> _exporter;
     private readonly TimeSpan _minimumDuration;
 
-    public MinimumDurationSqlProcessor(BaseExporter<Activity> exporter, TimeSpan minimumDuration)
+    public DurationFilterProcessor(BaseExporter<Activity> exporter, TimeSpan minimumDuration)
     {
-        _inner = new BatchActivityExportProcessor(exporter);
+        _exporter = exporter;
         _minimumDuration = minimumDuration;
     }
 
     public override void OnEnd(Activity data)
     {
-        var isSqlSpan = data.Kind == ActivityKind.Client &&
-            data.Tags.Any(tag => tag.Key == "db.system");
-
-        if (!isSqlSpan || data.Duration >= _minimumDuration)
-        {
-            _inner.OnEnd(data);
-        }
+        if (data.Duration >= _minimumDuration)
+            _exporter.Export(new Batch<Activity>(new[] { data }, 1));
     }
 
-    protected override bool OnForceFlush(int timeoutMilliseconds) =>
-        _inner.ForceFlush(timeoutMilliseconds);
-
-    protected override bool OnShutdown(int timeoutMilliseconds) =>
-        _inner.Shutdown(timeoutMilliseconds);
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _inner.Dispose();
-        }
-
-        base.Dispose(disposing);
-    }
+    protected override bool OnForceFlush(int timeoutMilliseconds) => true;
+    protected override bool OnShutdown(int timeoutMilliseconds) => true;
 }
 ```
+
+Register in DI:
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .ConfigureTracing(tracing =>
     {
         tracing.AddSqlClientInstrumentation();
-        tracing.AddProcessor(new MinimumDurationSqlProcessor(
-            new OtlpTraceExporter(new OtlpExporterOptions
-            {
-                Endpoint = new Uri("http://localhost:4317")
-            }),
+        tracing.AddProcessor(new DurationFilterProcessor(
+            new OtlpTraceExporter(new OtlpExporterOptions { Endpoint = new Uri("http://localhost:4317") }),
             TimeSpan.FromMilliseconds(100)));
     })
     .ConfigureMetrics(metrics => metrics.AddOtlpExporter())
     .ConfigureLogging(logging => logging.AddOtlpExporter());
 ```
 
-Do not combine this trace setup with `.WithOtlpExporter()`, or you will export traces twice.
+Do not combine with `.WithOtlpExporter()` or traces will export twice.
 
 </details>
 
 <details>
 <summary>Send all three signals to Azure Monitor</summary>
-
-Install `WitnessSharp.AzureMonitor`, then add the Azure Monitor exporters with one call.
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -263,9 +233,7 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     });
 ```
 
-If your environment already sets `APPLICATIONINSIGHTS_CONNECTION_STRING`, the parameterless `.WithAzureMonitor()` overload also works.
-
-See the [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for Azure-specific options and guidance.
+If `APPLICATIONINSIGHTS_CONNECTION_STRING` is already set, use `.WithAzureMonitor()` without arguments. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for configuration options.
 
 </details>
 
