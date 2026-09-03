@@ -37,9 +37,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `WitnessedAction`
 
-`WitnessedAction` wraps an `Activity`. Start one with `witness.StartAction("Name")`, attach tags or events, and dispose when the operation ends. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed. `Finish()` stops recording early without disposing the wrapper.
-
-When started from a typed `IWitness<T>`, the action also implements `IWitness<T>`, so extension methods resolve directly:
+`WitnessedAction` wraps an `Activity`. Start with `witness.StartAction("Name")`, attach tags or events, and dispose when done. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed. When started from `IWitness<T>`, the action also implements `IWitness<T>`:
 
 ```csharp
 public async Task<DashboardSummary> RetrieveSummaryAsync()
@@ -48,7 +46,7 @@ public async Task<DashboardSummary> RetrieveSummaryAsync()
     try
     {
         var summary = await _controller.RetrieveSummaryAsync();
-        action.LogDashboardSummaryRetrieved(); // same extension you'd call on the witness
+        action.LogDashboardSummaryRetrieved(); // typed extension method
         return summary;
     }
     catch (Exception exception)
@@ -59,11 +57,11 @@ public async Task<DashboardSummary> RetrieveSummaryAsync()
 }
 ```
 
-Use `var` (not an explicit `WitnessedAction` type) so the action keeps its `IWitness<T>` facet and the typed extension methods resolve.
+Use `var` to preserve the `IWitness<T>` facet and typed extension method resolution.
 
 ### Logging via extension methods
 
-WitnessSharp leans toward extension methods on `IWitness<T>` for recurring log messages. That keeps message templates in one place and keeps call sites small.
+Write extension methods on `IWitness<T>` for recurring log messages, keeping templates in one place:
 
 ```csharp
 public static class OrderServiceWitnessExtensions
@@ -73,7 +71,7 @@ public static class OrderServiceWitnessExtensions
 }
 ```
 
-The optional analyzer package spots these patterns and nudges you toward `LoggerMessage` where it pays off.
+The analyzer package spots these and suggests the `[LoggerMessage]` pattern where performance matters.
 
 ## Installation
 
@@ -86,12 +84,13 @@ dotnet add package WitnessSharp.Testing       # test projects
 
 ## Configuration reference
 
-You can configure WitnessSharp with either overload:
+Configure via `IConfiguration` or options:
 
 ```csharp
+// Via IConfiguration
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"));
 
-// or
+// Via options
 builder.Services.AddWitness(options =>
 {
     options.ServiceName = "orders-api";
@@ -130,25 +129,25 @@ builder.Services.AddWitness(options =>
 
 ### Fluent builder methods
 
-| Method | What it does | Notes |
-| --- | --- | --- |
-| `WithStandardInstrumentations()` | Adds ASP.NET Core and `HttpClient` tracing instrumentation. | |
-| `WithAspNetCoreInstrumentation(...)` | Adds ASP.NET Core tracing instrumentation. | Use the overload when you need request filtering or enrichment. |
-| `WithHttpClientInstrumentation(...)` | Adds `HttpClient` tracing instrumentation. | |
-| `WithOtlpExporter(...)` | Adds OTLP exporters for traces, metrics, and logs. | Good fit for OpenTelemetry Collector, Jaeger, Tempo, and similar backends. |
-| `WithConsoleExporter()` | Adds console exporters for traces, metrics, and logs. | Handy for local debugging. |
-| `WithAzureMonitor(...)` | Adds Azure Monitor exporters for traces, metrics, and logs. | Comes from `WitnessSharp.AzureMonitor`. |
-| `ClearLoggingProviders()` | Clears existing `Microsoft.Extensions.Logging` providers before OpenTelemetry logging is added. | Opt in only if you want OTel to be the only logging provider. |
+| Method | Purpose |
+| --- | --- |
+| `WithStandardInstrumentations()` | ASP.NET Core and `HttpClient` tracing |
+| `WithAspNetCoreInstrumentation(...)` | ASP.NET Core tracing (use overload for filtering/enrichment) |
+| `WithHttpClientInstrumentation(...)` | `HttpClient` tracing |
+| `WithOtlpExporter(...)` | OTLP exporters for Collector, Jaeger, Tempo, etc. |
+| `WithConsoleExporter()` | Console exporters (debugging) |
+| `WithAzureMonitor(...)` | Azure Monitor exporters (from `WitnessSharp.AzureMonitor`) |
+| `ClearLoggingProviders()` | Clear other logging providers before OpenTelemetry |
 
 ### Escape hatches
 
-| Method | Use it for |
+| Method | Purpose |
 | --- | --- |
-| `ConfigureTracing(Action<TracerProviderBuilder>)` | Custom sources, filters, processors, samplers, or exporter pipelines |
+| `ConfigureTracing(Action<TracerProviderBuilder>)` | Custom sources, filters, processors, samplers, or pipelines |
 | `ConfigureMetrics(Action<MeterProviderBuilder>)` | Custom meters, views, readers, or exporters |
-| `ConfigureLogging(Action<OpenTelemetryLoggerOptions>)` | OpenTelemetry logging options and exporters |
+| `ConfigureLogging(Action<OpenTelemetryLoggerOptions>)` | Logging options and exporters |
 
-If you configure an instrumentation manually through `ConfigureTracing`, skip the matching convenience method to avoid registering the same instrumentation twice.
+Avoid registering the same instrumentation twice: if you configure it via `ConfigureTracing`, skip the matching convenience method.
 
 ## Recipes
 
@@ -271,7 +270,7 @@ public class OrderServiceTests
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` (optional) adds `WS0001`, which flags templated `ILogger` calls inside `IWitness<T>` extension methods (as shown above) and suggests the `[LoggerMessage]` source generator. A code fix handles the rewrite. Configure severity in `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See the [`LoggerMessage` docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator) for background.
+`WitnessSharp.Analyzers` flags templated `ILogger` calls in `IWitness<T>` extension methods and suggests the `[LoggerMessage]` source generator pattern. Configure severity via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
 ## AOT support
 
