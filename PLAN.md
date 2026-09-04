@@ -221,13 +221,12 @@ The package adds these attributes to `ResourceBuilder`:
 
 ### Dropped from the current code
 
-The following were intentionally excluded (ported from `Taqa.OpenTelemetry` but not needed):
-- `OpenTelemetryConfiguration` record → replaced by options + builder
-- Hardcoded namespace, source filters, health-check/SQL thresholds
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead
+Intentionally excluded from the original `Taqa.OpenTelemetry`:
+- `OpenTelemetryConfiguration` → options + builder
+- Hardcoded filters/thresholds, `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes
 - `implicit operator ResourceBuilder`, `UseOpenTelemetry()` → `AddWitness()`
-- `ForType<TNew>()` → `IWitnessFactory`
-- `WitnessedAction` lifecycle events → deferred to post-v1
+- `ForType<TNew>()` → `IWitnessFactory` (cleaner SOLID separation)
+- `WitnessedAction` lifecycle events → post-v1
 
 ---
 
@@ -301,26 +300,16 @@ OSS housekeeping at v1: `LICENSE` (MIT), `CODE_OF_CONDUCT.md` (Contributor Coven
 
 ## Future-work register
 
-| Item | Status | Notes |
-| --- | --- | --- |
-| `WitnessedAction` extensibility | Deferred | Lifecycle events ruled out as leak-prone. Post-v1 candidates: `IWitnessedActionObserver` or `Func<WitnessedAction, ValueTask>` callback. |
-| Custom processors package | Deferred | Post-v1 if demand emerges (health checks, SQL filtering). v1 uses OTel native filtering via escape hatches. |
-| SqlClient / EFCore instrumentation sub-packages | Deferred | Kept out of core to avoid transitive dependencies. When demand warrants: `WitnessSharp.Instrumentation.SqlClient` / `.EntityFrameworkCore`. |
+**Deferred to post-v1**:
+- **`WitnessedAction` extensibility**: Lifecycle events deferred pending design for `IWitnessedActionObserver` or callback pattern.
+- **Custom processors**: SQL filtering, health checks via OTel native filtering; dedicated package if demand warrants.
+- **SqlClient / EFCore instrumentation**: Sub-packages (`WitnessSharp.Instrumentation.SqlClient`, `.EntityFrameworkCore`) avoid core transitive dependency bloat.
 
 ---
 
 ## Development methodology
 
-**Test-first (TDD)**: All production code written with tests first.
-
-**Quality gates** (before advancing):
-- **100% code coverage** — validated before moving forward
-- **Stryker mutation testing** — runs on core, testing, AzureMonitor packages; Analyzer package uses Roslyn test harness instead
-- **All tests green** — no skipped or ignored tests
-
-**Architecture**: DDD and hexagonal architecture (ports in core, OTel/Azure adapters) applied where the domain warrants it.
-
-**AOT/trimming**: Warnings from our code fail CI; upstream OTel warnings are documented but do not fail CI.
+Test-first (TDD) with 100% code coverage, Stryker mutation testing on core/testing/AzureMonitor packages (Analyzer uses Roslyn harness), and all tests green. DDD/hexagonal architecture where warranted; AOT warnings from our code fail CI.
 
 ---
 
