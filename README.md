@@ -33,45 +33,36 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-`IWitness<T>` is the main injectable — it bundles `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions over them. Most classes only need `IWitness<T>`; for witnesses created at runtime, inject `IWitnessFactory` and call `Create<T>()`.
+The main injectable bundling `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions. Most classes only need `IWitness<T>`; for runtime witness creation, inject `IWitnessFactory` and call `Create<T>()`.
 
 ### `WitnessedAction`
 
-`WitnessedAction` wraps an `Activity`. Start with `witness.StartAction("Name")`, attach tags or events, and dispose when done. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed. When started from `IWitness<T>`, the action also implements `IWitness<T>`:
+Wraps an `Activity`. Start with `witness.StartAction("Name")`, attach tags/events, and dispose when done. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed.
 
 ```csharp
-public async Task<DashboardSummary> RetrieveSummaryAsync()
+using var action = witness.StartAction("RetrieveSummary");
+try
 {
-    using var action = witness.StartAction(nameof(RetrieveSummaryAsync));
-    try
-    {
-        var summary = await _controller.RetrieveSummaryAsync();
-        action.LogDashboardSummaryRetrieved(); // typed extension method
-        return summary;
-    }
-    catch (Exception exception)
-    {
-        action.Failed(exception);
-        throw;
-    }
+    var summary = await _controller.RetrieveSummaryAsync();
+    return summary;
+}
+catch (Exception ex)
+{
+    action.Failed(ex);
+    throw;
 }
 ```
-
-Use `var` to preserve the `IWitness<T>` facet and typed extension method resolution.
 
 ### Logging via extension methods
 
-Write extension methods on `IWitness<T>` for recurring log messages, keeping templates in one place:
+Write extension methods on `IWitness<T>` for recurring log messages:
 
 ```csharp
-public static class OrderServiceWitnessExtensions
-{
-    public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-        witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-}
+public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
+    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
 ```
 
-The analyzer package spots these and suggests the `[LoggerMessage]` pattern where performance matters.
+The analyzer package suggests the `[LoggerMessage]` pattern for performance.
 
 ## Installation
 
@@ -238,52 +229,28 @@ If `APPLICATIONINSIGHTS_CONNECTION_STRING` is already set, use `.WithAzureMonito
 
 ## Testing
 
-`WitnessSharp.Testing` provides `TestWitness<T>`, an in-memory test double with `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` assertion helpers.
-
-Example:
+`WitnessSharp.Testing` provides `TestWitness<T>` with `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` helpers:
 
 ```csharp
-using Microsoft.Extensions.Logging;
-using WitnessSharp.Testing;
+using var witness = new TestWitness<OrderService>();
+var counter = witness.Meter.CreateCounter<int>("orders");
 
-public class OrderServiceTests
-{
-    [Fact]
-    public void PlaceOrder_emits_expected_telemetry()
-    {
-        using var witness = new TestWitness<OrderService>();
-        var counter = witness.Meter.CreateCounter<int>("orders");
+witness.Logger.LogInformation("Placed order 42");
+counter.Add(1);
+witness.StartAction("PlaceOrder").Dispose();
 
-        witness.Logger.LogInformation("Placed order 42");
-        counter.Add(1);
-
-        using (witness.StartAction("PlaceOrder"))
-        {
-        }
-
-        witness.AssertLogged(LogLevel.Information, "Placed order");
-        witness.AssertMetricRecorded("orders");
-        witness.AssertActivityStarted("PlaceOrder");
-    }
-}
+witness.AssertLogged(LogLevel.Information, "Placed order");
+witness.AssertMetricRecorded("orders");
+witness.AssertActivityStarted("PlaceOrder");
 ```
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` flags templated `ILogger` calls in `IWitness<T>` extension methods and suggests the `[LoggerMessage]` source generator pattern. Configure severity via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` flags templated `ILogger` calls in `IWitness<T>` extension methods and suggests the `[LoggerMessage]` pattern. Configure severity via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
 ## AOT support
 
 WitnessSharp is AOT/trim-friendly. Upstream instrumentation and exporter packages may emit warnings when publishing with `PublishAot=true`.
-
-## Package family
-
-| Package | Purpose |
-| --- | --- |
-| `WitnessSharp` | Core primitives, DI registration, `IWitness<T>`, `WitnessedAction`, options, and fluent builder extensions |
-| `WitnessSharp.AzureMonitor` | Azure Monitor exporter wiring via `.WithAzureMonitor()` |
-| `WitnessSharp.Analyzers` | Roslyn analyzer package with `WS0001` |
-| `WitnessSharp.Testing` | `TestWitness<T>` and assertion helpers for test projects |
 
 ## Contributing
 
