@@ -78,17 +78,15 @@ dotnet add package WitnessSharp.Testing       # test projects
 Configure via `IConfiguration` or options:
 
 ```csharp
-// Via IConfiguration
-builder.Services.AddWitness(builder.Configuration.GetSection("Witness"));
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
+    .WithStandardInstrumentations()
+    .WithOtlpExporter();
 
-// Via options
-builder.Services.AddWitness(options =>
-{
-    options.ServiceName = "orders-api";
-});
+// Or via options
+builder.Services.AddWitness(options => options.ServiceName = "orders-api");
 ```
 
-### `appsettings.json`
+**`appsettings.json`:**
 
 ```json
 {
@@ -100,52 +98,45 @@ builder.Services.AddWitness(options =>
     "DeploymentEnvironment": "Production",
     "AdditionalResourceAttributes": {
       "service.owner": "checkout",
-      "cloud.region": "westeurope",
-      "deployment.ring": "blue"
+      "cloud.region": "westeurope"
     }
   }
 }
 ```
 
-### `WitnessOptions`
+**`WitnessOptions` properties:**
 
 | Property | Description | Default |
 | --- | --- | --- |
-| `ServiceName` | Sets `service.name` (the service's primary identity). | Empty string |
-| `ServiceNamespace` | Sets `service.namespace`. | `null` |
-| `ServiceVersion` | Sets `service.version`. | `null` |
-| `ServiceInstanceId` | Sets `service.instance.id`. | `Environment.MachineName` |
-| `DeploymentEnvironment` | Sets `deployment.environment`. | `DOTNET_ENVIRONMENT`, then `ASPNETCORE_ENVIRONMENT` |
-| `AdditionalResourceAttributes` | Extra resource attributes applied to all signals. | Empty dictionary |
+| `ServiceName` | Service identity (`service.name`). | Empty string |
+| `ServiceNamespace` | Service namespace grouping. | `null` |
+| `ServiceVersion` | Service version tag. | `null` |
+| `ServiceInstanceId` | Instance identifier. | `Environment.MachineName` |
+| `DeploymentEnvironment` | Environment tag. | `DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT` |
+| `AdditionalResourceAttributes` | Extra resource attributes. | Empty dictionary |
 
-### Fluent builder methods
+### Builder options
 
-| Method | Purpose |
-| --- | --- |
-| `WithStandardInstrumentations()` | ASP.NET Core and `HttpClient` tracing |
-| `WithAspNetCoreInstrumentation(...)` | ASP.NET Core tracing (use overload for filtering/enrichment) |
-| `WithHttpClientInstrumentation(...)` | `HttpClient` tracing |
-| `WithOtlpExporter(...)` | OTLP exporters for Collector, Jaeger, Tempo, etc. |
-| `WithConsoleExporter()` | Console exporters (debugging) |
-| `WithAzureMonitor(...)` | Azure Monitor exporters (from `WitnessSharp.AzureMonitor`) |
-| `ClearLoggingProviders()` | Clear other logging providers before OpenTelemetry |
+**Instrumentations & exporters:**
+- `WithStandardInstrumentations()` — ASP.NET Core + HttpClient tracing
+- `WithAspNetCoreInstrumentation(...)` / `WithHttpClientInstrumentation(...)` — individual instrumentations
+- `WithOtlpExporter(...)` / `WithConsoleExporter()` — trace/metric/log exporters
+- `WithAzureMonitor(...)` — Azure Monitor integration (from `WitnessSharp.AzureMonitor`)
+- `ClearLoggingProviders()` — clear non-OTel logging providers
 
-### Escape hatches
+**Escape hatches** (full control):
+- `ConfigureTracing(...)` — custom sources, filters, processors, or samplers
+- `ConfigureMetrics(...)` — custom meters, views, or readers
+- `ConfigureLogging(...)` — logging options and exporters
 
-| Method | Purpose |
-| --- | --- |
-| `ConfigureTracing(Action<TracerProviderBuilder>)` | Custom sources, filters, processors, samplers, or pipelines |
-| `ConfigureMetrics(Action<MeterProviderBuilder>)` | Custom meters, views, readers, or exporters |
-| `ConfigureLogging(Action<OpenTelemetryLoggerOptions>)` | Logging options and exporters |
-
-Avoid registering the same instrumentation twice: if you configure it via `ConfigureTracing`, skip the matching convenience method.
+Don't register the same instrumentation both via convenience methods and escape hatches (traces export twice).
 
 ## Recipes
 
-WitnessSharp ships no hard-coded health-check or SQL filters; use the escape hatches to add your own.
+WitnessSharp ships no built-in filters; use escape hatches to add custom filtering or processing.
 
 <details>
-<summary>Filter out health-check spans</summary>
+<summary>Filter health-check and readiness spans</summary>
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -153,9 +144,9 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     {
         tracing.AddAspNetCoreInstrumentation(options =>
         {
-            options.Filter = httpContext =>
-                !httpContext.Request.Path.StartsWithSegments("/health") &&
-                !httpContext.Request.Path.StartsWithSegments("/ready");
+            options.Filter = ctx =>
+                !ctx.Request.Path.StartsWithSegments("/health") &&
+                !ctx.Request.Path.StartsWithSegments("/ready");
         });
         tracing.AddHttpClientInstrumentation();
     })
@@ -165,9 +156,7 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
 </details>
 
 <details>
-<summary>Filter spans by duration (e.g., SQL slower than 100 ms)</summary>
-
-Create a custom processor:
+<summary>Filter spans by duration (custom processor example)</summary>
 
 ```csharp
 public sealed class DurationFilterProcessor : BaseProcessor<Activity>
@@ -192,7 +181,7 @@ public sealed class DurationFilterProcessor : BaseProcessor<Activity>
 }
 ```
 
-Register in DI:
+Register with duration threshold (e.g., SQL slower than 100 ms):
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -207,12 +196,12 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .ConfigureLogging(logging => logging.AddOtlpExporter());
 ```
 
-Do not combine with `.WithOtlpExporter()` or traces will export twice.
+⚠️ Don't combine with `.WithOtlpExporter()` or traces export twice.
 
 </details>
 
 <details>
-<summary>Send all three signals to Azure Monitor</summary>
+<summary>Export all three signals to Azure Monitor</summary>
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -223,20 +212,18 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     });
 ```
 
-If `APPLICATIONINSIGHTS_CONNECTION_STRING` is already set, use `.WithAzureMonitor()` without arguments. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for configuration options.
+If `APPLICATIONINSIGHTS_CONNECTION_STRING` is set in the environment, use `.WithAzureMonitor()` without arguments. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
 
 </details>
 
 ## Testing
 
-`WitnessSharp.Testing` provides `TestWitness<T>` with `AssertLogged(...)`, `AssertMetricRecorded(...)`, and `AssertActivityStarted(...)` helpers:
+`WitnessSharp.Testing` provides `TestWitness<T>` with assertion helpers (`AssertLogged`, `AssertMetricRecorded`, `AssertActivityStarted`):
 
 ```csharp
 using var witness = new TestWitness<OrderService>();
-var counter = witness.Meter.CreateCounter<int>("orders");
-
 witness.Logger.LogInformation("Placed order 42");
-counter.Add(1);
+witness.Meter.CreateCounter<int>("orders").Add(1);
 witness.StartAction("PlaceOrder").Dispose();
 
 witness.AssertLogged(LogLevel.Information, "Placed order");
