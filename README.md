@@ -33,7 +33,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ### `IWitness<T>`
 
-The main injectable bundling `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions. Most classes only need `IWitness<T>`; for runtime witness creation, inject `IWitnessFactory` and call `Create<T>()`.
+The main injectable bundling `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions. Most classes only need `IWitness<T>`.
 
 ### `WitnessedAction`
 
@@ -55,14 +55,12 @@ catch (Exception ex)
 
 ### Logging via extension methods
 
-Write extension methods on `IWitness<T>` for recurring log messages:
+Write extension methods on `IWitness<T>` for recurring log messages. The analyzer package suggests the `[LoggerMessage]` pattern for performance:
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
     witness.Logger.LogInformation("Order {OrderId} placed", orderId);
 ```
-
-The analyzer package suggests the `[LoggerMessage]` pattern for performance.
 
 ## Installation
 
@@ -119,21 +117,19 @@ builder.Services.AddWitness(options => options.ServiceName = "orders-api");
 
 **Instrumentations & exporters:**
 - `WithStandardInstrumentations()` — ASP.NET Core + HttpClient tracing
-- `WithAspNetCoreInstrumentation(...)` / `WithHttpClientInstrumentation(...)` — individual instrumentations
-- `WithOtlpExporter(...)` / `WithConsoleExporter()` — trace/metric/log exporters
-- `WithAzureMonitor(...)` — Azure Monitor integration (from `WitnessSharp.AzureMonitor`)
-- `ClearLoggingProviders()` — clear non-OTel logging providers
+- `WithAspNetCoreInstrumentation(...)`/`WithHttpClientInstrumentation(...)` — individual instrumentations
+- `WithOtlpExporter(...)`/`WithConsoleExporter()` — exporters
+- `WithAzureMonitor(...)` — Azure Monitor integration
+- `ClearLoggingProviders()` — exclude non-OTel providers
 
-**Escape hatches** (full control):
-- `ConfigureTracing(...)` — custom sources, filters, processors, or samplers
-- `ConfigureMetrics(...)` — custom meters, views, or readers
-- `ConfigureLogging(...)` — logging options and exporters
+**Escape hatches** for full control:
+- `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` — access underlying OTel builders
 
-Don't register the same instrumentation both via convenience methods and escape hatches (traces export twice).
+⚠️ Don't mix convenience methods and escape hatches for the same instrumentation (avoid duplicate exports).
 
 ## Recipes
 
-WitnessSharp ships no built-in filters; use escape hatches to add custom filtering or processing.
+Use escape hatches to add custom filtering or processing:
 
 <details>
 <summary>Filter health-check and readiness spans</summary>
