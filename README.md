@@ -115,24 +115,15 @@ builder.Services.AddWitness(options => options.ServiceName = "orders-api");
 
 ### Builder options
 
-**Instrumentations & exporters:**
-- `WithStandardInstrumentations()` — ASP.NET Core + HttpClient tracing
-- `WithAspNetCoreInstrumentation(...)`/`WithHttpClientInstrumentation(...)` — individual instrumentations
-- `WithOtlpExporter(...)`/`WithConsoleExporter()` — exporters
-- `WithAzureMonitor(...)` — Azure Monitor integration
-- `ClearLoggingProviders()` — exclude non-OTel providers
+Configure instrumentations, exporters, and logging providers via fluent methods:
+- **Conveniences**: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `WithAzureMonitor(...)`, `ClearLoggingProviders()`
+- **Escape hatches**: `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` for direct access to OTel builders
 
-**Escape hatches** for full control:
-- `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` — access underlying OTel builders
-
-⚠️ Don't mix convenience methods and escape hatches for the same instrumentation (avoid duplicate exports).
+⚠️ Don't mix convenience methods and escape hatches for the same instrumentation.
 
 ## Recipes
 
-Use escape hatches to add custom filtering or processing:
-
-<details>
-<summary>Filter health-check and readiness spans</summary>
+Use escape hatches for custom filtering and exporters. For health-check/readiness filtering:
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -140,77 +131,21 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     {
         tracing.AddAspNetCoreInstrumentation(options =>
         {
-            options.Filter = ctx =>
-                !ctx.Request.Path.StartsWithSegments("/health") &&
-                !ctx.Request.Path.StartsWithSegments("/ready");
+            options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health");
         });
-        tracing.AddHttpClientInstrumentation();
     })
     .WithOtlpExporter();
 ```
 
-</details>
-
-<details>
-<summary>Filter spans by duration (custom processor example)</summary>
-
-```csharp
-public sealed class DurationFilterProcessor : BaseProcessor<Activity>
-{
-    private readonly BaseExporter<Activity> _exporter;
-    private readonly TimeSpan _minimumDuration;
-
-    public DurationFilterProcessor(BaseExporter<Activity> exporter, TimeSpan minimumDuration)
-    {
-        _exporter = exporter;
-        _minimumDuration = minimumDuration;
-    }
-
-    public override void OnEnd(Activity data)
-    {
-        if (data.Duration >= _minimumDuration)
-            _exporter.Export(new Batch<Activity>(new[] { data }, 1));
-    }
-
-    protected override bool OnForceFlush(int timeoutMilliseconds) => true;
-    protected override bool OnShutdown(int timeoutMilliseconds) => true;
-}
-```
-
-Register with duration threshold (e.g., SQL slower than 100 ms):
-
-```csharp
-builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
-    .ConfigureTracing(tracing =>
-    {
-        tracing.AddSqlClientInstrumentation();
-        tracing.AddProcessor(new DurationFilterProcessor(
-            new OtlpTraceExporter(new OtlpExporterOptions { Endpoint = new Uri("http://localhost:4317") }),
-            TimeSpan.FromMilliseconds(100)));
-    })
-    .ConfigureMetrics(metrics => metrics.AddOtlpExporter())
-    .ConfigureLogging(logging => logging.AddOtlpExporter());
-```
-
-⚠️ Don't combine with `.WithOtlpExporter()` or traces export twice.
-
-</details>
-
-<details>
-<summary>Export all three signals to Azure Monitor</summary>
+For duration-based filtering, implement a custom `BaseProcessor<Activity>` and register it via `ConfigureTracing()`. For Azure Monitor, use:
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .WithStandardInstrumentations()
-    .WithAzureMonitor(options =>
-    {
-        options.ConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
-    });
+    .WithAzureMonitor();
 ```
 
-If `APPLICATIONINSIGHTS_CONNECTION_STRING` is set in the environment, use `.WithAzureMonitor()` without arguments. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
-
-</details>
+The connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING` if available. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for details.
 
 ## Testing
 
