@@ -115,11 +115,13 @@ builder.Services.AddWitness(options => options.ServiceName = "orders-api");
 
 ### Builder options
 
-Configure instrumentations, exporters, and logging providers via fluent methods:
-- **Conveniences**: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `WithAzureMonitor(...)`, `ClearLoggingProviders()`
-- **Escape hatches**: `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` for direct access to OTel builders
+Configure via fluent methods:
 
-⚠️ Don't mix convenience methods and escape hatches for the same instrumentation.
+**Conveniences** — common scenarios: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `WithAzureMonitor(...)`, `ClearLoggingProviders()`.
+
+**Escape hatches** — advanced customization: `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` for direct OTel builder access.
+
+⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
 
 ## Recipes
 
