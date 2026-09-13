@@ -73,16 +73,7 @@ dotnet add package WitnessSharp.Testing       # test projects
 
 ## Configuration reference
 
-Configure via `IConfiguration` or options:
-
-```csharp
-builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
-    .WithStandardInstrumentations()
-    .WithOtlpExporter();
-
-// Or via options
-builder.Services.AddWitness(options => options.ServiceName = "orders-api");
-```
+Configure from `appsettings.json`:
 
 **`appsettings.json`:**
 
@@ -102,30 +93,37 @@ builder.Services.AddWitness(options => options.ServiceName = "orders-api");
 }
 ```
 
-**`WitnessOptions` properties:**
+Or via C# options: `builder.Services.AddWitness(options => options.ServiceName = "orders-api");`
 
-| Property | Description | Default |
-| --- | --- | --- |
-| `ServiceName` | Service identity (`service.name`). | Empty string |
-| `ServiceNamespace` | Service namespace grouping. | `null` |
-| `ServiceVersion` | Service version tag. | `null` |
-| `ServiceInstanceId` | Instance identifier. | `Environment.MachineName` |
-| `DeploymentEnvironment` | Environment tag. | `DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT` |
-| `AdditionalResourceAttributes` | Extra resource attributes. | Empty dictionary |
+**Options properties:**
 
-### Builder options
+| Property | Default |
+| --- | --- |
+| `ServiceName` | Empty string (service identity, `service.name` in OTel) |
+| `ServiceNamespace` | `null` (service grouping) |
+| `ServiceVersion` | `null` (version tag) |
+| `ServiceInstanceId` | `Environment.MachineName` |
+| `DeploymentEnvironment` | Auto-detected from environment variables |
+| `AdditionalResourceAttributes` | Empty dictionary |
 
-Configure via fluent methods:
+**Fluent builder methods:**
 
-**Conveniences** — common scenarios: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `WithAzureMonitor(...)`, `ClearLoggingProviders()`.
+| Method | Purpose |
+| --- | --- |
+| `WithStandardInstrumentations()` | Enable common instrumentation (ASP.NET Core, HTTP client) |
+| `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)` | Individual instrumentations |
+| `WithOtlpExporter(...)`, `WithConsoleExporter()` | Exporters |
+| `WithAzureMonitor(...)` | Azure Monitor integration |
+| `ClearLoggingProviders()` | Remove existing logging providers |
+| `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` | Direct OTel SDK customization |
 
-**Escape hatches** — advanced customization: `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` for direct OTel builder access.
-
-⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
+⚠️ Don't mix convenience methods and escape-hatch methods for the same instrumentation.
 
 ## Recipes
 
-Use escape hatches for custom filtering and exporters. For health-check/readiness filtering:
+### Health-check filtering
+
+Use escape hatches to filter health-check endpoints from traces:
 
 ```csharp
 builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
@@ -139,15 +137,13 @@ builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
     .WithOtlpExporter();
 ```
 
-For duration-based filtering, implement a custom `BaseProcessor<Activity>` and register it via `ConfigureTracing()`. For Azure Monitor, use:
+### Duration-based filtering
 
-```csharp
-builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
-    .WithStandardInstrumentations()
-    .WithAzureMonitor();
-```
+Implement a custom `BaseProcessor<Activity>` and register via `ConfigureTracing()`.
 
-The connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING` if available. See [Azure Monitor OpenTelemetry exporter docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme) for details.
+### Azure Monitor
+
+Calls `.WithAzureMonitor()` (from `WitnessSharp.AzureMonitor` package). Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
 
 ## Testing
 
