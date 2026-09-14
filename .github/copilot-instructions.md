@@ -85,27 +85,25 @@ Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp
 
 ## Design Principles (priority order)
 
-1. **Open for extension, closed for modification.** Sensible defaults that users compose on top of — never replace.
-2. **Don't re-abstract things .NET already does well.** `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` stay canonical.
-3. **Lean defaults, fluent opt-in.** The package is opinionated about shape/primitives, not about what's pre-enabled.
-4. **One central injectable per call site.** `IWitness<T>` is the contribution; standard primitives remain exposed.
+1. **Open for extension, closed for modification** — sensible defaults composed on, never replaced.
+2. **Lean defaults, fluent opt-in** — opinionated about shape/primitives, not about what's pre-enabled.
+3. **One central injectable per call site** — `IWitness<T>` is the contribution; standard primitives (`IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter`) remain exposed.
+4. **Don't re-abstract .NET** — reuse canonical abstractions rather than introduce alternatives.
 
 ## Key Conventions
 
 ### Deliberate design choices — do not "fix"
 
-- `WitnessedAction.Activity` is a public property (promoted from field). Keep it public.
-- `WitnessedAction.Finish()` exists alongside `Dispose()` by design — callers may stop without disposing.
-- `WitnessedAction` is a **pure primitive** in v1 — no lifecycle events (`OnSuccess`/`OnFailure`/etc.). Extensibility story deferred to post-v1.
-- `IWitness<T>` does NOT have `ForType<TNew>()`. Sub-creation is handled by injecting `IWitnessFactory` separately (clean SOLID separation).
+- `WitnessedAction.Activity` is public by design.
+- `WitnessedAction.Finish()` exists alongside `Dispose()` — callers choose whether to dispose.
+- `WitnessedAction` is a pure primitive in v1 — no lifecycle events. Extensibility deferred to post-v1.
+- `IWitness<T>` has no `ForType<TNew>()` — sub-creation via `IWitnessFactory` injected separately (SOLID separation).
 
 ### Setup API conventions
 
-- `AddWitness()` is the entry point (not `UseOpenTelemetry`).
-- Registration alone (no `.With*` calls) is valid — gives DI primitives + resource attributes only.
-- Behavior toggles (instrumentations, exporters) live on the fluent builder, not in options.
-- Config section: `Witness` in `appsettings.json`.
-- `ClearProviders()` is off by default; consumers opt in via `.ClearLoggingProviders()`.
+- Entry point is `AddWitness()` (not `UseOpenTelemetry`). Bare registration provides DI primitives + resource attributes.
+- Behavior toggles (instrumentations, exporters) go on the fluent builder, not options.
+- Config section: `Witness` in `appsettings.json`. `ClearProviders()` opt-in via `.ClearLoggingProviders()`.
 
 ### Logging pattern & interceptor-based optimization
 
@@ -140,14 +138,7 @@ No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel 
 
 ### What was intentionally dropped from the reference implementation
 
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
+Not ported from `Taqa.OpenTelemetry`: custom processors (use OTel's native filtering via escape hatches instead; README has recipes), hardcoded filters/paths/thresholds, `implicit operator ResourceBuilder`, `OpenTelemetryConfiguration` record (replaced by options + builder), `ForType<TNew>()` (replaced by `IWitnessFactory`), and `WitnessedAction` lifecycle events (deferred to post-v1).
 
 ## Reference Implementation
 
