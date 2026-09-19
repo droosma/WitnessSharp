@@ -95,55 +95,31 @@ Configure from `appsettings.json`:
 
 Or via C# options: `builder.Services.AddWitness(options => options.ServiceName = "orders-api");`
 
-**Options properties:**
-
-| Property | Default |
-| --- | --- |
-| `ServiceName` | Empty string (service identity, `service.name` in OTel) |
-| `ServiceNamespace` | `null` (service grouping) |
-| `ServiceVersion` | `null` (version tag) |
-| `ServiceInstanceId` | `Environment.MachineName` |
-| `DeploymentEnvironment` | Auto-detected from environment variables |
-| `AdditionalResourceAttributes` | Empty dictionary |
-
-**Fluent builder methods:**
-
-| Method | Purpose |
-| --- | --- |
-| `WithStandardInstrumentations()` | Enable common instrumentation (ASP.NET Core, HTTP client) |
-| `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)` | Individual instrumentations |
-| `WithOtlpExporter(...)`, `WithConsoleExporter()` | Exporters |
-| `WithAzureMonitor(...)` | Azure Monitor integration |
-| `ClearLoggingProviders()` | Remove existing logging providers |
-| `ConfigureTracing(...)`, `ConfigureMetrics(...)`, `ConfigureLogging(...)` | Direct OTel SDK customization |
+**Fluent builder methods** like `WithStandardInstrumentations()`, `WithOtlpExporter()`, `ClearLoggingProviders()`, and individual instrumentations (`WithAspNetCoreInstrumentation()`, etc.). Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK customization.
 
 ⚠️ Don't mix convenience methods and escape-hatch methods for the same instrumentation.
 
 ## Recipes
 
-### Health-check filtering
+### Filtering traces
 
-Use escape hatches to filter health-check endpoints from traces:
+Filter health-check endpoints via `ConfigureTracing()`:
 
 ```csharp
-builder.Services.AddWitness(builder.Configuration.GetSection("Witness"))
-    .ConfigureTracing(tracing =>
+.ConfigureTracing(tracing =>
+{
+    tracing.AddAspNetCoreInstrumentation(options =>
     {
-        tracing.AddAspNetCoreInstrumentation(options =>
-        {
-            options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health");
-        });
-    })
-    .WithOtlpExporter();
+        options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health");
+    });
+})
 ```
 
-### Duration-based filtering
-
-Implement a custom `BaseProcessor<Activity>` and register via `ConfigureTracing()`.
+For duration-based filtering, implement a custom `BaseProcessor<Activity>` and register via `ConfigureTracing()`.
 
 ### Azure Monitor
 
-Calls `.WithAzureMonitor()` (from `WitnessSharp.AzureMonitor` package). Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
+Use `.WithAzureMonitor()` (from `WitnessSharp.AzureMonitor` package). Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
 
 ## Testing
 
@@ -162,7 +138,7 @@ witness.AssertActivityStarted("PlaceOrder");
 
 ## Analyzer (`WS0001`)
 
-`WitnessSharp.Analyzers` flags templated `ILogger` calls in `IWitness<T>` extension methods and suggests the `[LoggerMessage]` pattern. Configure severity via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` suggests the `[LoggerMessage]` pattern for templated logging in `IWitness<T>` extension methods. Configure via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
 ## AOT support
 
