@@ -149,13 +149,7 @@ public interface IWitnessBuilder
 }
 ```
 
-Convenience methods as **extension methods** (keeping the interface minimal and allowing sub-packages to extend):
-- `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`
-- `WithOtlpExporter(...)`, `WithConsoleExporter()`
-- `ClearLoggingProviders()`
-- `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`)
-
-SqlClient/EntityFrameworkCore instrumentations deferred to dedicated sub-packages to avoid transitive dependencies.
+Convenience methods are extension methods (interface stays minimal, allowing sub-packages to extend): `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). SqlClient/EntityFrameworkCore instrumentations defer to dedicated sub-packages to avoid transitive bloat.
 
 ### Resource attributes
 
@@ -165,29 +159,21 @@ Auto-populated from `WitnessOptions`: `service.name`, `service.namespace`, `serv
 
 By default, OTel logging provider is added alongside existing providers. Consumers opt in via `.ClearLoggingProviders()` to use OTel only.
 
-### Dropped from the current code
+### Dropped from the original `Taqa.OpenTelemetry`
 
-Intentionally excluded from the original `Taqa.OpenTelemetry`:
-- `OpenTelemetryConfiguration` → options + builder
-- Hardcoded filters/thresholds, `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes
+- `OpenTelemetryConfiguration` → replaced by options + builder
+- Hardcoded filters/thresholds, `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → documented in README recipes
 - `implicit operator ResourceBuilder`, `UseOpenTelemetry()` → `AddWitness()`
-- `ForType<TNew>()` → `IWitnessFactory` (cleaner SOLID separation)
-- `WitnessedAction` lifecycle events → post-v1
+- `ForType<TNew>()` → `IWitnessFactory` for cleaner SOLID separation
+- `WitnessedAction` lifecycle events → deferred to post-v1
 
 ---
 
-## Best-practice nudges — `WitnessSharp.Analyzers`
-
-Separate NuGet package. Users opt in.
+## Analyzer — `WitnessSharp.Analyzers` (opt-in package)
 
 ### `WS0001`
 
-Flags templated `ILogger` calls in `IWitness<T>` extension methods with code-fix to `[LoggerMessage]`.
-
-- **net8.0**: Manual optimization via code-fix
-- **net9.0+/net10.0**: Source-generator interceptor rewrites calls transparently to allocation-free `[LoggerMessage]` equivalents (core to value proposition)
-
-Future rules (post-v1): require `WitnessedAction` in `using` statements, constant activity names, avoid raw primitives outside extensions/tests.
+Flags templated `ILogger` calls in `IWitness<T>` extension methods. **net8.0**: code-fix suggests manual `[LoggerMessage]` adoption. **net9.0+/net10.0**: source-generator interceptor transparently rewrites calls to allocation-free `[LoggerMessage]` equivalents. Future rules (post-v1): require `using` statements for `WitnessedAction`, constant activity names.
 
 ---
 
@@ -253,23 +239,21 @@ Deferred to post-v1:
 
 ## Development methodology
 
-Test-first (TDD) with 100% code coverage. Stryker mutation testing on core/testing/AzureMonitor packages. Analyzer uses Roslyn harness. All tests green. DDD/hexagonal architecture where warranted. AOT warnings from our code fail CI.
+Test-first (TDD): 100% code coverage required, Stryker mutation testing on core/testing/AzureMonitor packages (analyzer uses Roslyn harness for behavioral testing), all tests green. DDD/hexagonal architecture applied where warranted. AOT warnings from our code fail CI.
 
 ---
 
-## v1 implementation milestones
+## v1 implementation sequence (rough ordering)
 
-A rough sequencing for execution, not a commitment.
-
-1. **Scaffolding** — monorepo layout, centralized package config, `.editorconfig`, MIT LICENSE, README skeleton, GitHub Actions `build.yml`
-2. **Core types** — `IWitness`, `IWitness<T>`, `Witness<T>`, `IWitnessFactory`, `WitnessedAction`, `StartAction` extension, unit tests
-3. **Setup API** — `WitnessOptions`, fluent builder, `AddWitness` overloads, resource-attribute composition, unit + integration tests
+1. **Scaffolding** — monorepo layout, centralized package config, `.editorconfig`, MIT LICENSE, README skeleton, `build.yml`
+2. **Core types** — `IWitness`, `IWitness<T>`, `Witness<T>`, `IWitnessFactory`, `WitnessedAction`, extensions, tests
+3. **Setup API** — `WitnessOptions`, fluent builder, `AddWitness` overloads, resource attributes, integration tests
 4. **`WitnessSharp.Testing`** — `TestWitness<T>` and assertion helpers
-5. **`WitnessSharp.AzureMonitor`** — `.WithAzureMonitor(connStr)` extension, integration test with fake OTLP
-6. **`WitnessSharp.Analyzers` (diagnostic)** — `WS0001` rule + code-fix, analyzer test project
-7. **`WitnessSharp.Analyzers` (interceptor)** — source-generator interceptor for transparent `[LoggerMessage]` on net9.0+/net10.0, tests verifying output
-8. **AOT** — sample app `PublishAot=true` in CI, fix warnings in our code
+5. **`WitnessSharp.AzureMonitor`** — `.WithAzureMonitor(connStr)` extension, integration test
+6. **`WitnessSharp.Analyzers` (diagnostic)** — `WS0001` rule + code-fix
+7. **`WitnessSharp.Analyzers` (interceptor)** — source-generator for net9.0+/net10.0
+8. **AOT** — sample app `PublishAot=true`, fix warnings in our code
 9. **Sample app** — `samples/SampleWebApi` end-to-end with docker-compose
 10. **Docs** — flesh out README (quickstart, concepts, recipes, testing, AOT)
-11. **`release.yml`** — tag-driven NuGet publish, dry-run with `0.1.0-preview.1`
-12. **`0.1.0` release** — tag, publish, announce
+11. **CI/CD** — `release.yml` for tag-driven NuGet publish
+12. **Release** — cut `0.1.0`
