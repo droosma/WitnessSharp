@@ -2,11 +2,7 @@
 
 A small, opinionated .NET observability package built on OpenTelemetry. Provides `IWitness<T>` (bundling `ILogger<T>` + `Meter` + `ActivitySource`), `WitnessedAction` for user-defined operations, a lean fluent bootstrap, and an optional Roslyn analyzer.
 
-Design principles:
-1. **Open for extension, closed for modification**
-2. **Don't re-abstract .NET primitives** — use `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` directly
-3. **Lean defaults, fluent opt-in** — opinionated about shape/primitives, not what's pre-enabled
-4. **One central injectable per call site** — `IWitness<T>` is the contribution; standard primitives stay exposed
+Design principles: open for extension; don't re-abstract .NET primitives (`IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter`); lean defaults with fluent opt-in; one central injectable (`IWitness<T>`) per call site.
 
 ---
 
@@ -14,36 +10,16 @@ Design principles:
 
 All targets: **`net8.0;net10.0`** (multi-target). License: **MIT**.
 
+Monorepo layout:
+
 | Package | Purpose |
-| --- | --- |
+|---------|---------|
 | `WitnessSharp` | Core observability: interfaces, `Witness<T>`, `WitnessedAction`, options, fluent builder, DI extensions. |
 | `WitnessSharp.AzureMonitor` | Optional Azure Monitor exporter (`.WithAzureMonitor(...)`) without core transitive dependencies. |
 | `WitnessSharp.Analyzers` | Opt-in Roslyn analyzer with `WS0001` rule and code-fix (one rule in v1). |
 | `WitnessSharp.Testing` | Test doubles: `TestWitness<T>` capturing logs, metrics, and activities for assertions. |
 
-Monorepo, single `.sln`, layout:
-
-```
-WitnessSharp/
-  src/
-    WitnessSharp/
-    WitnessSharp.AzureMonitor/
-    WitnessSharp.Analyzers/
-    WitnessSharp.Testing/
-  tests/
-    WitnessSharp.Tests/
-    WitnessSharp.AzureMonitor.Tests/
-    WitnessSharp.Analyzers.Tests/
-    WitnessSharp.Testing.Tests/
-  samples/
-    SampleWebApi/        # ASP.NET Core minimal API, traces/metrics/logs → OTLP + console
-  .github/workflows/
-  README.md
-  LICENSE
-  Directory.Build.props
-  Directory.Packages.props      # central package versioning
-  WitnessSharp.slnx
-```
+Tests mirror the `src` structure. Sample app at `samples/SampleWebApi`.
 
 Versioning: **SemVer**, start at `0.1.0` and iterate; cut `1.0` once the public API has stabilized.
 
@@ -149,23 +125,7 @@ public interface IWitnessBuilder
 }
 ```
 
-Convenience methods are extension methods (interface stays minimal, allowing sub-packages to extend): `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter(...)`, `WithConsoleExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). SqlClient/EntityFrameworkCore instrumentations defer to dedicated sub-packages to avoid transitive bloat.
-
-### Resource attributes
-
-Auto-populated from `WitnessOptions`: `service.name`, `service.namespace`, `service.version`, `service.instance.id`, `deployment.environment`, `telemetry.sdk.*`, and `AdditionalResourceAttributes`.
-
-### Logging providers
-
-By default, OTel logging provider is added alongside existing providers. Consumers opt in via `.ClearLoggingProviders()` to use OTel only.
-
-### Dropped from the original `Taqa.OpenTelemetry`
-
-- `OpenTelemetryConfiguration` → replaced by options + builder
-- Hardcoded filters/thresholds, `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → documented in README recipes
-- `implicit operator ResourceBuilder`, `UseOpenTelemetry()` → `AddWitness()`
-- `ForType<TNew>()` → `IWitnessFactory` for cleaner SOLID separation
-- `WitnessedAction` lifecycle events → deferred to post-v1
+Convenience extension methods (interface stays minimal for extensibility): `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches: `ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()` for direct OTel SDK customization. Don't mix convenience and escape-hatch methods for the same instrumentation.
 
 ---
 
