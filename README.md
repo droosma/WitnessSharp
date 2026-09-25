@@ -29,33 +29,19 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 `AddWitness()` binds `WitnessOptions` from the `"Witness"` section.
 
-## Concepts
+## Key concepts
 
-### `IWitness<T>`
+**`IWitness<T>`**: Bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable with no new abstractions.
 
-The main injectable bundling `ILogger<T>`, `Meter`, and `ActivitySource` with no new abstractions. Most classes only need `IWitness<T>`.
-
-### `WitnessedAction`
-
-Wraps an `Activity`. Start with `witness.StartAction("Name")`, attach tags/events, and dispose when done. Outcomes default to success; call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` as needed.
+**`WitnessedAction`**: Wraps an `Activity`. Start with `witness.StartAction("Name")`, set tags/events, and dispose when done. Call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` to mark non-success outcomes:
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
-try
-{
-    var summary = await _controller.RetrieveSummaryAsync();
-    return summary;
-}
-catch (Exception ex)
-{
-    action.Failed(ex);
-    throw;
-}
+try { return await _controller.RetrieveSummaryAsync(); }
+catch (Exception ex) { action.Failed(ex); throw; }
 ```
 
-### Logging via extension methods
-
-Write extension methods on `IWitness<T>` for recurring log messages. The analyzer package suggests the `[LoggerMessage]` pattern for performance:
+**Logging extension methods**: Write extensions on `IWitness<T>` for recurring messages. The analyzer package suggests `[LoggerMessage]` for performance:
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
@@ -71,12 +57,11 @@ dotnet add package WitnessSharp.Analyzers     # optional
 dotnet add package WitnessSharp.Testing       # test projects
 ```
 
-## Configuration reference
+## Configuration
 
-Configure from `appsettings.json`:
+Configure from `appsettings.json` or C# options:
 
-**`appsettings.json`:**
-
+**`appsettings.json`**:
 ```json
 {
   "Witness": {
@@ -85,19 +70,12 @@ Configure from `appsettings.json`:
     "ServiceVersion": "1.3.0",
     "ServiceInstanceId": "orders-api-01",
     "DeploymentEnvironment": "Production",
-    "AdditionalResourceAttributes": {
-      "service.owner": "checkout",
-      "cloud.region": "westeurope"
-    }
+    "AdditionalResourceAttributes": { "service.owner": "checkout" }
   }
 }
 ```
 
-Or via C# options: `builder.Services.AddWitness(options => options.ServiceName = "orders-api");`
-
-**Fluent builder methods** like `WithStandardInstrumentations()`, `WithOtlpExporter()`, `ClearLoggingProviders()`, and individual instrumentations (`WithAspNetCoreInstrumentation()`, etc.). Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK customization.
-
-⚠️ Don't mix convenience methods and escape-hatch methods for the same instrumentation.
+**Fluent builder**: Methods like `WithStandardInstrumentations()`, `WithOtlpExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor()`. Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access. ⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
 
 ## Recipes
 
@@ -136,9 +114,9 @@ witness.AssertMetricRecorded("orders");
 witness.AssertActivityStarted("PlaceOrder");
 ```
 
-## Analyzer (`WS0001`)
+## Analyzer (WS0001)
 
-`WitnessSharp.Analyzers` suggests the `[LoggerMessage]` pattern for templated logging in `IWitness<T>` extension methods. Configure via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` suggests the `[LoggerMessage]` pattern for templated logging in `IWitness<T>` extension methods. Configure via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [WS0001 rule](docs/rules/WS0001.md) and [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
 ## AOT support
 
