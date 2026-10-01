@@ -33,7 +33,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 **`IWitness<T>`**: Bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable with no new abstractions.
 
-**`WitnessedAction`**: Wraps an `Activity`. Start with `witness.StartAction("Name")`, set tags/events, and dispose when done. Call `Failed(Exception)`, `Failed(string)`, or `Cancelled()` to mark non-success outcomes:
+**`WitnessedAction`**: Wraps an `Activity`. Call `witness.StartAction("Name")`, set tags/events, and dispose when done. Use `Failed()` or `Cancelled()` to mark non-success outcomes:
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
@@ -75,13 +75,13 @@ Configure from `appsettings.json` or C# options:
 }
 ```
 
-**Fluent builder**: Methods like `WithStandardInstrumentations()`, `WithOtlpExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor()`. Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access. ⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
+**Fluent builder**: Chain methods to configure instrumentations, exporters, and logging (see quickstart). Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access. ⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
 
 ## Recipes
 
 ### Filtering traces
 
-Filter health-check endpoints via `ConfigureTracing()`:
+Filter endpoints via `ConfigureTracing()`:
 
 ```csharp
 .ConfigureTracing(tracing =>
@@ -93,7 +93,7 @@ Filter health-check endpoints via `ConfigureTracing()`:
 })
 ```
 
-For duration-based filtering, implement a custom `BaseProcessor<Activity>` and register via `ConfigureTracing()`.
+For other filters (duration, status codes), use a custom `BaseProcessor<Activity>` via `ConfigureTracing()`.
 
 ### Azure Monitor
 
@@ -101,7 +101,7 @@ Use `.WithAzureMonitor()` (from `WitnessSharp.AzureMonitor` package). Connection
 
 ## Testing
 
-`WitnessSharp.Testing` provides `TestWitness<T>` with assertion helpers (`AssertLogged`, `AssertMetricRecorded`, `AssertActivityStarted`):
+`WitnessSharp.Testing` provides `TestWitness<T>` for capturing and asserting logged messages, metrics, and activities:
 
 ```csharp
 using var witness = new TestWitness<OrderService>();
