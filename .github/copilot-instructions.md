@@ -83,29 +83,20 @@ The separate packages naturally enforce this: `WitnessSharp` is the core, `Witne
 
 Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp / NHibernate). `Sharp` lives at the package boundary only.
 
-## Design Principles (priority order)
+## Design Principles & Conventions
 
-1. **Open for extension, closed for modification.** Sensible defaults that users compose on top of — never replace.
-2. **Don't re-abstract things .NET already does well.** `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` stay canonical.
-3. **Lean defaults, fluent opt-in.** The package is opinionated about shape/primitives, not about what's pre-enabled.
-4. **One central injectable per call site.** `IWitness<T>` is the contribution; standard primitives remain exposed.
+**Core principles** (priority order):
+1. Open for extension, closed for modification — sensible defaults users compose on top of.
+2. Don't re-abstract .NET primitives (`IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter`).
+3. Lean defaults, fluent opt-in — opinionated about shape, not pre-enabled features.
+4. One injectable per call site — `IWitness<T>` is the contribution; standard primitives exposed.
 
-## Key Conventions
-
-### Deliberate design choices — do not "fix"
-
-- `WitnessedAction.Activity` is a public property (promoted from field). Keep it public.
-- `WitnessedAction.Finish()` exists alongside `Dispose()` by design — callers may stop without disposing.
-- `WitnessedAction` is a **pure primitive** in v1 — no lifecycle events (`OnSuccess`/`OnFailure`/etc.). Extensibility story deferred to post-v1.
-- `IWitness<T>` does NOT have `ForType<TNew>()`. Sub-creation is handled by injecting `IWitnessFactory` separately (clean SOLID separation).
-
-### Setup API conventions
-
-- `AddWitness()` is the entry point (not `UseOpenTelemetry`).
-- Registration alone (no `.With*` calls) is valid — gives DI primitives + resource attributes only.
-- Behavior toggles (instrumentations, exporters) live on the fluent builder, not in options.
-- Config section: `Witness` in `appsettings.json`.
-- `ClearProviders()` is off by default; consumers opt in via `.ClearLoggingProviders()`.
+**Deliberate design choices** (do not change):
+- `WitnessedAction.Activity` is public; `Finish()` exists alongside `Dispose()` for explicit lifecycle control.
+- No lifecycle events (`OnSuccess`/`OnFailure`) in v1; extensibility deferred.
+- `IWitness<T>` has no `ForType<TNew>()` — use `IWitnessFactory` for runtime creation (SOLID separation).
+- `AddWitness()` is the entry point; registration alone is valid (gives DI primitives + resource attributes).
+- Behavior toggles live on the fluent builder, not options; config section is `Witness` in `appsettings.json`.
 
 ### Logging pattern & interceptor-based optimization
 
@@ -138,21 +129,6 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 
 No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
 
-### What was intentionally dropped from the reference implementation
+## Reference
 
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
-
-## Reference Implementation
-
-The original code being ported from lives at `D:\reference\Taqa\` (read-only). Key files:
-- `Taqa.OpenTelemetry\Monitor.cs` — original `Monitor<T>` interface (renamed to `Witness<T>` in this package).
-- `Taqa.OpenTelemetry\MonitoredAction.cs` — original `MonitoredAction` (renamed to `WitnessedAction`).
-- `Taqa.OpenTelemetry\OpenTelemetryConfiguration.cs` — old config (replaced by `WitnessOptions` + `IWitnessBuilder`).
-- `Taqa.OpenTelemetry\OpenTelemetryServiceCollectionExtensions.cs` — old DI entry point (replaced by `AddWitness`).
+This package is ported from `Taqa.OpenTelemetry`. Key renames: `Monitor<T>` → `Witness<T>`, `MonitoredAction` → `WitnessedAction`. Intentionally dropped: hardcoded processors, source filters, health-check thresholds, and `ForType<TNew>()` on `IWitness<T>`.
