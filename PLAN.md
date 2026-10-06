@@ -27,9 +27,9 @@ Versioning: **SemVer**, start at `0.1.0` and iterate; cut `1.0` once the public 
 
 ## Core types
 
-### `IWitness` and `IWitness<T>`
+### `IWitness<T>` and `IWitnessFactory`
 
-Mirrors `ILogger`/`ILogger<T>` shape for familiar usage:
+Mirrors `ILogger`/`ILogger<T>` for familiar usage. `Witness<T>` (sealed, singleton) is the default implementation:
 
 ```csharp
 public interface IWitness
@@ -39,30 +39,20 @@ public interface IWitness
     ILogger Logger { get; }
 }
 
-public interface IWitness<out T> : IWitness
-{
-    new ILogger<T> Logger { get; }
-}
+public interface IWitness<out T> : IWitness { new ILogger<T> Logger { get; } }
 ```
 
-**`Witness<T>`** (sealed class, singleton) is the default implementation; a non-generic `Witness` is also registered for `IWitness`.
-
-### `IWitnessFactory`
-
-Separate injectable for runtime `IWitness<T>` creation (replaces `ForType<TNew>()` to avoid ISP violation):
+For runtime `IWitness<T>` creation, inject `IWitnessFactory`:
 
 ```csharp
-public interface IWitnessFactory
-{
-    IWitness<T> Create<T>();
-}
+public interface IWitnessFactory { IWitness<T> Create<T>(); }
 ```
 
-Use when a class constructs instances at runtime needing typed witnesses. Most callers only inject `IWitness<T>` directly.
+Use `IWitnessFactory` when constructing instances at runtime; most call sites inject `IWitness<T>` directly.
 
 ### `WitnessedAction`
 
-Disposable primitive managing an `Activity`'s lifecycle (no lifecycle events in v1; extensibility deferred).
+Disposable primitive wrapping an `Activity` lifecycle (no lifecycle events in v1):
 
 ```csharp
 public enum WitnessedOutcome { Success, Failure, Cancelled }
@@ -82,22 +72,22 @@ public sealed class WitnessedAction : IDisposable
 }
 ```
 
-Created via `witness.StartAction("Name")` extension. The `Activity` property and `Finish()` method are by design. `Activity.AddException()` uses .NET 9+ method or `net8.0` polyfill.
+Created via `witness.StartAction("Name")`. The `Activity` property and `Finish()` method are intentional (not removable).
 
 ---
 
 ## Setup API
 
-### Entry point
+**Entry point:**
 
 ```csharp
 public static IWitnessBuilder AddWitness(this IServiceCollection services, Action<WitnessOptions> configure);
 public static IWitnessBuilder AddWitness(this IServiceCollection services, IConfiguration section);
 ```
 
-Returns a fluent builder. Calling alone (no `.With*` methods) is valid—registers `IWitness<T>`, `Meter`, `ActivitySource`, and resource attributes.
+Registers `IWitness<T>`, `Meter`, `ActivitySource`, and resource attributes. Fluent builder is optional (calling alone is valid).
 
-### Options
+**Options** (binds from `appsettings.json:Witness`):
 
 ```csharp
 public sealed class WitnessOptions
@@ -111,9 +101,9 @@ public sealed class WitnessOptions
 }
 ```
 
-Binds from `IConfiguration` (e.g. `appsettings.json:Witness`). Behavior toggles (instrumentation, exporters, filters) live on the fluent builder, *not* in options — they're code, not config.
+Behavior toggles (instrumentation, exporters, filters) live on the fluent builder (code, not config).
 
-### Fluent builder
+**Fluent builder:**
 
 ```csharp
 public interface IWitnessBuilder
@@ -125,15 +115,13 @@ public interface IWitnessBuilder
 }
 ```
 
-Convenience extension methods (interface stays minimal for extensibility): `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, and `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches: `ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()` for direct OTel SDK customization. Don't mix convenience and escape-hatch methods for the same instrumentation.
+Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) for direct OTel SDK access. Don't mix convenience and escape-hatch methods for the same instrumentation.
 
 ---
 
-## Analyzer — `WitnessSharp.Analyzers` (opt-in package)
+## Analyzer — `WitnessSharp.Analyzers` (opt-in)
 
-### `WS0001`
-
-Flags templated `ILogger` calls in `IWitness<T>` extension methods. **net8.0**: code-fix suggests manual `[LoggerMessage]` adoption. **net9.0+/net10.0**: source-generator interceptor transparently rewrites calls to allocation-free `[LoggerMessage]` equivalents. Future rules (post-v1): require `using` statements for `WitnessedAction`, constant activity names.
+**`WS0001`**: Flags templated `ILogger` calls in `IWitness<T>` extension methods. On **net8.0**, code-fix suggests manual `[LoggerMessage]`. On **net9.0+/net10.0**, source-generator interceptor optimizes automatically. Future rules (post-v1): `using` statements for `WitnessedAction`, constant activity names.
 
 ---
 
@@ -152,7 +140,7 @@ public sealed class TestWitness<T> : IWitness<T>
 }
 ```
 
-In-memory logger (compatible with `Microsoft.Extensions.Logging.Testing`), `Meter` + `MeterListener`, and `ActivityListener` for capture. Includes assertion helpers like `witness.AssertLogged(LogLevel.Error, "...")`.
+In-memory capture via `MeterListener`, `ActivityListener`, and compatible logging backend. Includes assertion helpers: `AssertLogged()`, `AssertMetricRecorded()`, `AssertActivityStarted()`.
 
 
 ---
