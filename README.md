@@ -31,9 +31,9 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ## Key concepts
 
-**`IWitness<T>`**: Bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable with no new abstractions.
+**`IWitness<T>`**: Bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable.
 
-**`WitnessedAction`**: Wraps an `Activity`. Call `witness.StartAction("Name")`, set tags/events, and dispose when done. Use `Failed()` or `Cancelled()` to mark non-success outcomes:
+**`WitnessedAction`**: Wraps an `Activity`. Call `witness.StartAction("Name")`, set tags/events, and dispose. Use `Failed()` or `Cancelled()` to mark outcomes:
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
@@ -41,7 +41,7 @@ try { return await _controller.RetrieveSummaryAsync(); }
 catch (Exception ex) { action.Failed(ex); throw; }
 ```
 
-**Logging extension methods**: Write extensions on `IWitness<T>` for recurring messages. The analyzer package suggests `[LoggerMessage]` for performance:
+**Logging extension methods**: Extend `IWitness<T>` with typed logging helpers. The analyzer suggests `[LoggerMessage]` for performance:
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
@@ -75,7 +75,7 @@ Configure from `appsettings.json` or C# options:
 }
 ```
 
-**Fluent builder**: Chain methods to configure instrumentations, exporters, and logging (see quickstart). Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access. ⚠️ Don't mix convenience and escape-hatch methods for the same instrumentation.
+**Fluent builder**: Chain methods to configure instrumentations and exporters. Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access (avoid mixing convenience and escape-hatch methods for the same instrumentation).
 
 ## Recipes
 
@@ -116,7 +116,7 @@ witness.AssertActivityStarted("PlaceOrder");
 
 ## Analyzer (WS0001)
 
-`WitnessSharp.Analyzers` suggests the `[LoggerMessage]` pattern for templated logging in `IWitness<T>` extension methods. Configure via `.editorconfig`: `dotnet_diagnostic.WS0001.severity = warning`. See [WS0001 rule](docs/rules/WS0001.md) and [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` suggests `[LoggerMessage]` for templated logging in extension methods. See [WS0001 rule](docs/rules/WS0001.md) and [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
 
 ## AOT support
 
@@ -124,7 +124,7 @@ WitnessSharp is AOT/trim-friendly. Upstream instrumentation and exporter package
 
 ## Contributing
 
-Contributions welcome. Build with `dotnet build WitnessSharp.slnx`, test with `dotnet test WitnessSharp.slnx`, then open a pull request. Follow `CONTRIBUTING.md` if present.
+Build with `dotnet build WitnessSharp.slnx`, test with `dotnet test WitnessSharp.slnx`, then open a pull request.
 
 ## License
 
