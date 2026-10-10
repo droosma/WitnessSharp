@@ -29,7 +29,7 @@ Versioning: **SemVer**, start at `0.1.0` and iterate; cut `1.0` once the public 
 
 ### `IWitness<T>` and `IWitnessFactory`
 
-Mirrors `ILogger`/`ILogger<T>` for familiar usage. `Witness<T>` (sealed, singleton) is the default implementation:
+Mirrors `ILogger`/`ILogger<T>` for familiar usage. Default implementation is `Witness<T>` (sealed, singleton):
 
 ```csharp
 public interface IWitness
@@ -48,11 +48,11 @@ For runtime `IWitness<T>` creation, inject `IWitnessFactory`:
 public interface IWitnessFactory { IWitness<T> Create<T>(); }
 ```
 
-Use `IWitnessFactory` when constructing instances at runtime; most call sites inject `IWitness<T>` directly.
+Most call sites inject `IWitness<T>` directly; use `IWitnessFactory` when constructing instances at runtime.
 
 ### `WitnessedAction`
 
-Disposable primitive wrapping an `Activity` lifecycle (no lifecycle events in v1):
+Disposable primitive wrapping an `Activity`:
 
 ```csharp
 public enum WitnessedOutcome { Success, Failure, Cancelled }
@@ -72,7 +72,7 @@ public sealed class WitnessedAction : IDisposable
 }
 ```
 
-Created via `witness.StartAction("Name")`. The `Activity` property and `Finish()` method are intentional (not removable).
+Created via `witness.StartAction("Name")`. The `Activity` property and `Finish()` method are intentional design choices (not removable). No lifecycle events in v1.
 
 ---
 
@@ -85,7 +85,7 @@ public static IWitnessBuilder AddWitness(this IServiceCollection services, Actio
 public static IWitnessBuilder AddWitness(this IServiceCollection services, IConfiguration section);
 ```
 
-Registers `IWitness<T>`, `Meter`, `ActivitySource`, and resource attributes. Fluent builder is optional (calling alone is valid).
+Registers `IWitness<T>`, `Meter`, `ActivitySource`, and resource attributes.
 
 **Options** (binds from `appsettings.json:Witness`):
 
@@ -101,9 +101,7 @@ public sealed class WitnessOptions
 }
 ```
 
-Behavior toggles (instrumentation, exporters, filters) live on the fluent builder (code, not config).
-
-**Fluent builder:**
+**Fluent builder** (optional; `AddWitness()` alone is valid):
 
 ```csharp
 public interface IWitnessBuilder
@@ -115,7 +113,7 @@ public interface IWitnessBuilder
 }
 ```
 
-Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) for direct OTel SDK access. Don't mix convenience and escape-hatch methods for the same instrumentation.
+Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) provide direct OTel SDK access—do not mix convenience and escape-hatch methods for the same instrumentation.
 
 ---
 
