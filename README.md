@@ -31,9 +31,9 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ## Key concepts
 
-**`IWitness<T>`**: Bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable.
+**`IWitness<T>`** bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable.
 
-**`WitnessedAction`**: Wraps an `Activity`. Call `witness.StartAction("Name")`, set tags/events, and dispose. Use `Failed()` or `Cancelled()` to mark outcomes:
+**`WitnessedAction`** wraps an `Activity` created via `witness.StartAction("Name")`. Call `Dispose()` when complete, or use `Failed(ex)` / `Cancelled()` to mark outcomes:
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
@@ -41,7 +41,7 @@ try { return await _controller.RetrieveSummaryAsync(); }
 catch (Exception ex) { action.Failed(ex); throw; }
 ```
 
-**Logging extension methods**: Extend `IWitness<T>` with typed logging helpers. The analyzer suggests `[LoggerMessage]` for performance:
+**Logging extension methods** on `IWitness<T>` are optimized on **net9.0+** via a source-generator interceptor; on **net8.0**, apply the `WS0001` analyzer's code-fix:
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
@@ -59,9 +59,8 @@ dotnet add package WitnessSharp.Testing       # test projects
 
 ## Configuration
 
-Configure from `appsettings.json` or C# options:
+Configure from `appsettings.json`:
 
-**`appsettings.json`**:
 ```json
 {
   "Witness": {
@@ -75,13 +74,11 @@ Configure from `appsettings.json` or C# options:
 }
 ```
 
-**Fluent builder**: Chain methods to configure instrumentations and exporters. Use `ConfigureTracing()`, `ConfigureMetrics()`, or `ConfigureLogging()` for direct OTel SDK access (avoid mixing convenience and escape-hatch methods for the same instrumentation).
+Or use the fluent builder: `AddWitness(options => { ... })`. Chain methods like `.WithStandardInstrumentations()`, `.WithOtlpExporter()`, or `.ConfigureTracing(...)` for direct OTel SDK access. Use escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) to avoid mixing convenience and low-level methods for the same instrumentation.
 
 ## Recipes
 
-### Filtering traces
-
-Filter endpoints via `ConfigureTracing()`:
+**Filtering traces**: Use `ConfigureTracing()` to customize instrumentation filters:
 
 ```csharp
 .ConfigureTracing(tracing =>
@@ -93,11 +90,9 @@ Filter endpoints via `ConfigureTracing()`:
 })
 ```
 
-For other filters (duration, status codes), use a custom `BaseProcessor<Activity>` via `ConfigureTracing()`.
+For other filters (duration, status codes), add a custom `BaseProcessor<Activity>` via `ConfigureTracing()`.
 
-### Azure Monitor
-
-Use `.WithAzureMonitor()` (from `WitnessSharp.AzureMonitor` package). Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
+**Azure Monitor**: Call `.WithAzureMonitor()` from the `WitnessSharp.AzureMonitor` package. Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
 
 ## Testing
 
