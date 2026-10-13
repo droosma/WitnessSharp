@@ -42,17 +42,7 @@ public static class WitnessBuilderExtensions
     public static IWitnessBuilder WithAspNetCoreInstrumentation(
         this IWitnessBuilder builder,
         Action<AspNetCoreTraceInstrumentationOptions>? configure = null) =>
-        builder.ConfigureTracing(tracer =>
-        {
-            if (configure is null)
-            {
-                tracer.AddAspNetCoreInstrumentation();
-            }
-            else
-            {
-                tracer.AddAspNetCoreInstrumentation(configure);
-            }
-        });
+        builder.ConfigureTracing(tracer => tracer.AddAspNetCoreInstrumentation(configure));
 
     /// <summary>Enables HttpClient tracing instrumentation.</summary>
     /// <param name="builder">The builder to configure.</param>
@@ -62,17 +52,7 @@ public static class WitnessBuilderExtensions
     public static IWitnessBuilder WithHttpClientInstrumentation(
         this IWitnessBuilder builder,
         Action<HttpClientTraceInstrumentationOptions>? configure = null) =>
-        builder.ConfigureTracing(tracer =>
-        {
-            if (configure is null)
-            {
-                tracer.AddHttpClientInstrumentation();
-            }
-            else
-            {
-                tracer.AddHttpClientInstrumentation(configure);
-            }
-        });
+        builder.ConfigureTracing(tracer => tracer.AddHttpClientInstrumentation(configure));
 
     // ----- Exporters -----
 
