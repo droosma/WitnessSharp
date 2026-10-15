@@ -14,12 +14,12 @@ Monorepo layout:
 
 | Package | Purpose |
 |---------|---------|
-| `WitnessSharp` | Core observability: interfaces, `Witness<T>`, `WitnessedAction`, options, fluent builder, DI extensions. |
-| `WitnessSharp.AzureMonitor` | Optional Azure Monitor exporter (`.WithAzureMonitor(...)`) without core transitive dependencies. |
-| `WitnessSharp.Analyzers` | Opt-in Roslyn analyzer with `WS0001` rule and code-fix (one rule in v1). |
-| `WitnessSharp.Testing` | Test doubles: `TestWitness<T>` capturing logs, metrics, and activities for assertions. |
+| `WitnessSharp` | Core: `Witness<T>`, `WitnessedAction`, options, fluent builder, DI extensions. |
+| `WitnessSharp.AzureMonitor` | Optional Azure Monitor exporter without core transitive dependencies. |
+| `WitnessSharp.Analyzers` | Roslyn analyzer: `WS0001` rule with code-fix. |
+| `WitnessSharp.Testing` | Test doubles: `TestWitness<T>` capturing logs, metrics, and activities. |
 
-Tests mirror the `src` structure. Sample app at `samples/SampleWebApi`.
+Tests mirror `src`; sample app at `samples/SampleWebApi`.
 
 Versioning: **SemVer**, start at `0.1.0` and iterate; cut `1.0` once the public API has stabilized.
 
@@ -95,8 +95,8 @@ public sealed class WitnessOptions
     public string ServiceName { get; set; } = "";
     public string? ServiceNamespace { get; set; }
     public string? ServiceVersion { get; set; }
-    public string? ServiceInstanceId { get; set; }      // defaults to Environment.MachineName
-    public string? DeploymentEnvironment { get; set; }  // auto from DOTNET_ENVIRONMENT / ASPNETCORE_ENVIRONMENT
+    public string? ServiceInstanceId { get; set; }
+    public string? DeploymentEnvironment { get; set; }
     public IDictionary<string, object> AdditionalResourceAttributes { get; } = new Dictionary<string, object>();
 }
 ```
@@ -113,13 +113,13 @@ public interface IWitnessBuilder
 }
 ```
 
-Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation(...)`, `WithHttpClientInstrumentation(...)`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor(...)` (from `WitnessSharp.AzureMonitor`). Escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) provide direct OTel SDK access—do not mix convenience and escape-hatch methods for the same instrumentation.
+Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation()`, `WithHttpClientInstrumentation()`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor()`. Escape hatches provide direct OTel SDK access—do not mix convenience and escape-hatch methods for the same instrumentation.
 
 ---
 
 ## Analyzer — `WitnessSharp.Analyzers` (opt-in)
 
-**`WS0001`**: Flags templated `ILogger` calls in `IWitness<T>` extension methods. On **net8.0**, code-fix suggests manual `[LoggerMessage]`. On **net9.0+/net10.0**, source-generator interceptor optimizes automatically. Future rules (post-v1): `using` statements for `WitnessedAction`, constant activity names.
+**`WS0001`**: Flags templated `ILogger` calls in `IWitness<T>` extension methods. On **net8.0**, code-fix suggests `[LoggerMessage]`. On **net9.0+**, source-generator interceptor optimizes automatically.
 
 ---
 
@@ -167,25 +167,25 @@ Branch model: trunk-based on `main`, tag-driven releases.
 
 ## Docs
 
-- **README.md**: 30-second quickstart, concepts, configuration reference, recipes, testing, AOT notes.
-- **Per-package READMEs** on NuGet.org (no DocFX site in v1).
-- **OSS housekeeping**: LICENSE (MIT), CODE_OF_CONDUCT.md, CONTRIBUTING.md, issue/PR templates.
+- **README.md**: quickstart, concepts, configuration, recipes, testing, AOT notes
+- **Per-package READMEs** on NuGet.org
+- **OSS housekeeping**: LICENSE, CODE_OF_CONDUCT.md, CONTRIBUTING.md, templates
 
 ---
 
 ## Future-work register
 
 Deferred to post-v1:
-- **`WitnessedAction` extensibility**: Lifecycle events pending `IWitnessedActionObserver` design.
-- **Custom processors**: OTel native filtering; dedicated package if demand warrants.
-- **SqlClient / EFCore instrumentation**: Sub-packages to avoid core transitive bloat.
+- **`WitnessedAction` extensibility**: Lifecycle events / observers
+- **Custom processors**: OTel filtering recipes or dedicated package
+- **SqlClient / EFCore instrumentation**: Sub-packages to avoid bloat
 
 
 ---
 
 ## Development methodology
 
-Test-first (TDD): 100% code coverage required, Stryker mutation testing on core/testing/AzureMonitor packages (analyzer uses Roslyn harness for behavioral testing), all tests green. DDD/hexagonal architecture applied where warranted. AOT warnings from our code fail CI.
+Test-first (TDD): 100% code coverage, Stryker mutation testing (core/testing/AzureMonitor), all tests green. DDD/hexagonal applied where warranted. AOT warnings from our code fail CI.
 
 ---
 
