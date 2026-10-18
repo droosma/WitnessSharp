@@ -74,25 +74,21 @@ Configure from `appsettings.json`:
 }
 ```
 
-Or use the fluent builder: `AddWitness(options => { ... })`. Chain methods like `.WithStandardInstrumentations()`, `.WithOtlpExporter()`, or `.ConfigureTracing(...)` for direct OTel SDK access. Use escape hatches (`ConfigureTracing()`, `ConfigureMetrics()`, `ConfigureLogging()`) to avoid mixing convenience and low-level methods for the same instrumentation.
+Or use the fluent builder: `AddWitness(options => { ... })`. Chain methods like `.WithStandardInstrumentations()`, `.WithOtlpExporter()`, or `.ConfigureTracing(...)` for direct OTel SDK access.
 
 ## Recipes
 
-**Filtering traces**: Use `ConfigureTracing()` to customize instrumentation filters:
+**Filtering traces**: Use `ConfigureTracing()` to customize filters. For example, exclude health checks:
 
 ```csharp
 .ConfigureTracing(tracing =>
 {
     tracing.AddAspNetCoreInstrumentation(options =>
-    {
-        options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health");
-    });
+        options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"));
 })
 ```
 
-For other filters (duration, status codes), add a custom `BaseProcessor<Activity>` via `ConfigureTracing()`.
-
-**Azure Monitor**: Call `.WithAzureMonitor()` from the `WitnessSharp.AzureMonitor` package. Connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`. See [Azure Monitor docs](https://learn.microsoft.com/en-us/dotnet/api/overview/azure/monitor.opentelemetry.exporter-readme).
+**Azure Monitor**: Call `.WithAzureMonitor()` from `WitnessSharp.AzureMonitor`. The connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`.
 
 ## Testing
 
