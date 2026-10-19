@@ -83,12 +83,12 @@ The separate packages naturally enforce this: `WitnessSharp` is the core, `Witne
 
 Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp / NHibernate). `Sharp` lives at the package boundary only.
 
-## Design Principles (priority order)
+## Design Principles
 
-1. **Open for extension, closed for modification.** Sensible defaults that users compose on top of — never replace.
-2. **Don't re-abstract things .NET already does well.** `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` stay canonical.
-3. **Lean defaults, fluent opt-in.** The package is opinionated about shape/primitives, not about what's pre-enabled.
-4. **One central injectable per call site.** `IWitness<T>` is the contribution; standard primitives remain exposed.
+1. **Open for extension, closed for modification** — sensible defaults composed, never replaced.
+2. **Don't re-abstract .NET primitives** — `IConfiguration`, `IOptions`, `ILoggerFactory`, `Activity`, `Meter` stay canonical.
+3. **Lean defaults, fluent opt-in** — opinionated about shape/primitives, not what's pre-enabled.
+4. **One central injectable per call site** — `IWitness<T>` is the contribution; standard primitives exposed.
 
 ## Key Conventions
 
@@ -118,11 +118,7 @@ public static void LogOrderPlaced(this IWitness<OrderService> witness, int order
 }
 ```
 
-On **net9.0+/net10.0**: a source-generator interceptor transparently rewrites these calls to `[LoggerMessage]`-equivalent allocation-free code at compile time. The consumer never writes or sees `[LoggerMessage]` attributes.
-
-On **net8.0**: standard `ILogger` behavior (no interception). The `WS0001` analyzer + code-fix offers manual optimization.
-
-This interceptor is **v1 scope** — it's core to the package's value proposition.
+On **net9.0+/net10.0**, a source-generator interceptor transparently rewrites these to `[LoggerMessage]`-equivalent allocation-free code at compile time. On **net8.0**, the `WS0001` analyzer + code-fix offers manual optimization. This interceptor is v1 scope and core to the package's value proposition.
 
 ### AOT
 
@@ -134,25 +130,6 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 - Version derived from git tags via MinVer/nbgv — no manual `<Version>` in csproj files.
 - SemVer starting at `0.1.0`.
 
-### No custom processors in v1
+### Design scope (v1)
 
-No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
-
-### What was intentionally dropped from the reference implementation
-
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
-
-## Reference Implementation
-
-The original code being ported from lives at `D:\reference\Taqa\` (read-only). Key files:
-- `Taqa.OpenTelemetry\Monitor.cs` — original `Monitor<T>` interface (renamed to `Witness<T>` in this package).
-- `Taqa.OpenTelemetry\MonitoredAction.cs` — original `MonitoredAction` (renamed to `WitnessedAction`).
-- `Taqa.OpenTelemetry\OpenTelemetryConfiguration.cs` — old config (replaced by `WitnessOptions` + `IWitnessBuilder`).
-- `Taqa.OpenTelemetry\OpenTelemetryServiceCollectionExtensions.cs` — old DI entry point (replaced by `AddWitness`).
+No custom OTel processors (`SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, etc.). Consumers use OTel's native filtering via escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns.
