@@ -31,9 +31,9 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 ## Key concepts
 
-**`IWitness<T>`** bundles `ILogger<T>`, `Meter`, and `ActivitySource` into a single injectable.
+**`IWitness<T>`** bundles `ILogger<T>`, `Meter`, and `ActivitySource` into one injectable.
 
-**`WitnessedAction`** wraps an `Activity` created via `witness.StartAction("Name")`. Call `Dispose()` when complete, or use `Failed(ex)` / `Cancelled()` to mark outcomes:
+**`WitnessedAction`** wraps an `Activity` created via `witness.StartAction("Name")`. Mark outcomes with `Dispose()`, `Failed(ex)`, or `Cancelled()`:
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
@@ -41,7 +41,7 @@ try { return await _controller.RetrieveSummaryAsync(); }
 catch (Exception ex) { action.Failed(ex); throw; }
 ```
 
-**Logging extension methods** on `IWitness<T>` are optimized on **net9.0+** via a source-generator interceptor; on **net8.0**, apply the `WS0001` analyzer's code-fix:
+**Logging extension methods** on `IWitness<T>` are optimized on **net9.0+** via source-generator interceptor; on **net8.0**, use the `WS0001` analyzer's code-fix:
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
@@ -74,25 +74,22 @@ Configure from `appsettings.json`:
 }
 ```
 
-Or use the fluent builder: `AddWitness(options => { ... })`. Chain methods like `.WithStandardInstrumentations()`, `.WithOtlpExporter()`, or `.ConfigureTracing(...)` for direct OTel SDK access.
+Or use the fluent builder: `AddWitness(options => { ... }).WithStandardInstrumentations().WithOtlpExporter()` for direct OTel SDK access via `.ConfigureTracing(...)`, `.ConfigureMetrics(...)`, etc.
 
 ## Recipes
 
-**Filtering traces**: Use `ConfigureTracing()` to customize filters. For example, exclude health checks:
+**Filtering traces**: Use `ConfigureTracing()` to customize. For example, exclude health checks:
 
 ```csharp
-.ConfigureTracing(tracing =>
-{
-    tracing.AddAspNetCoreInstrumentation(options =>
-        options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"));
-})
+.ConfigureTracing(tracing => tracing.AddAspNetCoreInstrumentation(options =>
+    options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health")))
 ```
 
 **Azure Monitor**: Call `.WithAzureMonitor()` from `WitnessSharp.AzureMonitor`. The connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`.
 
 ## Testing
 
-`WitnessSharp.Testing` provides `TestWitness<T>` for capturing and asserting logged messages, metrics, and activities:
+`WitnessSharp.Testing` provides `TestWitness<T>` to capture and assert on logs, metrics, and activities:
 
 ```csharp
 using var witness = new TestWitness<OrderService>();
