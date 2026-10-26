@@ -47,18 +47,9 @@ All production code is written test-first. The workflow is:
 - **Analyzer package**: the Roslyn test harness inherently validates behavior (assertions are "this code produces diagnostic X at location Y"). Stryker is not required here — the harness already guarantees behavioral testing.
 - **All tests green** — no skipped or ignored tests left behind.
 
-### DDD (Domain-Driven Design)
+### DDD and Hexagonal Architecture
 
-Apply DDD where the domain warrants it. In this package the core domain is the observability primitives (`IWitness<T>`, `WitnessedAction`, `WitnessedOutcome`). Keep domain logic free of infrastructure concerns.
-
-### Hexagonal Architecture
-
-Use ports-and-adapters separation where called for:
-- **Core/domain** — pure abstractions and logic (`IWitness<T>`, `WitnessedAction`, options).
-- **Ports** — interfaces defining what the core needs (e.g., `IWitnessBuilder` as a configuration port).
-- **Adapters** — implementations wiring to infrastructure (OTel SDK, Azure Monitor, DI registration).
-
-The separate packages naturally enforce this: `WitnessSharp` is the core, `WitnessSharp.AzureMonitor` is an adapter.
+Apply DDD with ports-and-adapters where warranted. Core domain: the observability primitives (`IWitness<T>`, `WitnessedAction`, `WitnessedOutcome`). Keep domain logic free of infrastructure. Ports define what core needs (e.g., `IWitnessBuilder` as configuration). Adapters wire to infrastructure (OTel SDK, Azure Monitor, DI). The monorepo naturally enforces this: `WitnessSharp` is core, `WitnessSharp.AzureMonitor` is an adapter.
 
 ## Architecture
 
@@ -73,11 +64,11 @@ The separate packages naturally enforce this: `WitnessSharp` is the core, `Witne
 
 **Key types:**
 
-- `IWitness<T>` — the single injectable per call site; mirrors `ILogger<T>` shape. Does NOT have `ForType<TNew>()`.
-- `IWitnessFactory` — separate singleton injectable for creating `IWitness<T>` instances at runtime (e.g., when a class constructs sub-objects that need typed witnesses).
-- `Witness<T>` — sealed singleton implementation; exposes `Meter`, `ActivitySource`, `ILogger<T>`.
-- `WitnessedAction` — disposable primitive wrapping `Activity` with `Outcome` (Success/Failure/Cancelled). No lifecycle events in v1.
-- `WitnessedOutcome` — enum on `WitnessedAction.Outcome` (matched-adjective pattern with `WitnessedAction`).
+- `IWitness<T>` — single injectable per call site; mirrors `ILogger<T>` (no `ForType<TNew>()`).
+- `IWitnessFactory` — creates `IWitness<T>` at runtime (e.g., constructing child objects).
+- `Witness<T>` — sealed singleton; exposes `Meter`, `ActivitySource`, `ILogger<T>`.
+- `WitnessedAction` — disposable wrapping `Activity` with `Outcome` (Success/Failure/Cancelled).
+- `WitnessedOutcome` — enum (Success/Failure/Cancelled); matched-adjective with `WitnessedAction`.
 - `WitnessOptions` — config-bindable options (service name, namespace, version, etc.).
 - `IWitnessBuilder` — fluent builder returned by `AddWitness()`.
 
@@ -94,10 +85,10 @@ Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp
 
 ### Deliberate design choices — do not "fix"
 
-- `WitnessedAction.Activity` is a public property (promoted from field). Keep it public.
-- `WitnessedAction.Finish()` exists alongside `Dispose()` by design — callers may stop without disposing.
-- `WitnessedAction` is a **pure primitive** in v1 — no lifecycle events (`OnSuccess`/`OnFailure`/etc.). Extensibility story deferred to post-v1.
-- `IWitness<T>` does NOT have `ForType<TNew>()`. Sub-creation is handled by injecting `IWitnessFactory` separately (clean SOLID separation).
+- `WitnessedAction.Activity` is public (promoted from field).
+- `WitnessedAction.Finish()` exists alongside `Dispose()` — callers stop without disposing.
+- `WitnessedAction` is a pure primitive (no lifecycle events like `OnSuccess`/`OnFailure`); extensibility deferred to post-v1.
+- `IWitness<T>` has no `ForType<TNew>()`. Sub-creation via injected `IWitnessFactory` (clean SOLID).
 
 ### Setup API conventions
 
@@ -109,20 +100,14 @@ Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp
 
 ### Logging pattern & interceptor-based optimization
 
-The package promotes extension methods on `IWitness<T>` where consumers write natural `ILogger` calls:
+The package promotes extension methods on `IWitness<T>`:
 
 ```csharp
-public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId)
-{
+public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
     witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-}
 ```
 
-On **net9.0+/net10.0**: a source-generator interceptor transparently rewrites these calls to `[LoggerMessage]`-equivalent allocation-free code at compile time. The consumer never writes or sees `[LoggerMessage]` attributes.
-
-On **net8.0**: standard `ILogger` behavior (no interception). The `WS0001` analyzer + code-fix offers manual optimization.
-
-This interceptor is **v1 scope** — it's core to the package's value proposition.
+On **net9.0+/net10.0**: a source-generator interceptor transparently optimizes to `[LoggerMessage]`-equivalent allocation-free code. On **net8.0**: standard behavior; use `WS0001` analyzer + code-fix for manual optimization. This interceptor is **v1 scope** — core to the package's value proposition.
 
 ### AOT
 
@@ -136,18 +121,11 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 
 ### No custom processors in v1
 
-No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
+No custom processors (e.g., `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`). Consumers use OTel's native filtering via escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns; complementary packages may be added post-v1 if demand warrants.
 
 ### What was intentionally dropped from the reference implementation
 
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
+From the original `Taqa.OpenTelemetry`, **not** ported: custom processors → recipes; hardcoded source filters and health-check logic; `implicit operator ResourceBuilder`; `OpenTelemetryConfiguration` record → options + builder; `ForType<TNew>()` on interface → `IWitnessFactory`; `WitnessedAction` lifecycle events → deferred to post-v1.
 
 ## Reference Implementation
 
