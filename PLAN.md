@@ -29,30 +29,16 @@ Versioning: **SemVer**, start at `0.1.0` and iterate; cut `1.0` once the public 
 
 ### `IWitness<T>` and `IWitnessFactory`
 
-Mirrors `ILogger`/`ILogger<T>` for familiar usage. Default implementation is `Witness<T>` (sealed, singleton):
+Mirrors `ILogger`/`ILogger<T>` for familiar usage. Default: `Witness<T>` (sealed, singleton). Most call sites inject `IWitness<T>` directly; use `IWitnessFactory` for runtime instance creation.
 
 ```csharp
-public interface IWitness
-{
-    Meter Meter { get; }
-    ActivitySource ActivitySource { get; }
-    ILogger Logger { get; }
-}
-
 public interface IWitness<out T> : IWitness { new ILogger<T> Logger { get; } }
-```
-
-For runtime `IWitness<T>` creation, inject `IWitnessFactory`:
-
-```csharp
 public interface IWitnessFactory { IWitness<T> Create<T>(); }
 ```
 
-Most call sites inject `IWitness<T>` directly; use `IWitnessFactory` when constructing instances at runtime.
-
 ### `WitnessedAction`
 
-Disposable primitive wrapping an `Activity`:
+Disposable primitive wrapping an `Activity`, created via `witness.StartAction("Name")`. Track outcomes with `Dispose()`, `Failed(ex)`, or `Cancelled()`. `Activity` property and `Finish()` method are by design. No lifecycle events in v1.
 
 ```csharp
 public enum WitnessedOutcome { Success, Failure, Cancelled }
@@ -61,31 +47,21 @@ public sealed class WitnessedAction : IDisposable
 {
     public Activity? Activity { get; }
     public WitnessedOutcome Outcome { get; private set; } = WitnessedOutcome.Success;
-
-    public WitnessedAction SetTag(string key, object? value) { … return this; }
-    public WitnessedAction AddEvent(string name, ActivityTagsCollection? tags = null) { … return this; }
     public void Failed(Exception? exception = null) { … }
-    public void Failed(string reason) { … }
     public void Cancelled() { … }
     public void Finish() => Activity?.Stop();
-    public void Dispose() { … }
 }
 ```
-
-Created via `witness.StartAction("Name")`. The `Activity` property and `Finish()` method are intentional design choices (not removable). No lifecycle events in v1.
 
 ---
 
 ## Setup API
 
-**Entry point:**
+**Entry point** (registers `IWitness<T>`, `Meter`, `ActivitySource`, resource attributes):
 
 ```csharp
-public static IWitnessBuilder AddWitness(this IServiceCollection services, Action<WitnessOptions> configure);
-public static IWitnessBuilder AddWitness(this IServiceCollection services, IConfiguration section);
+builder.Services.AddWitness(builder.Configuration.GetSection("Witness"));
 ```
-
-Registers `IWitness<T>`, `Meter`, `ActivitySource`, and resource attributes.
 
 **Options** (binds from `appsettings.json:Witness`):
 
@@ -106,14 +82,14 @@ public sealed class WitnessOptions
 ```csharp
 public interface IWitnessBuilder
 {
-    IServiceCollection Services { get; }
     IWitnessBuilder ConfigureTracing(Action<TracerProviderBuilder> configure);
     IWitnessBuilder ConfigureMetrics(Action<MeterProviderBuilder> configure);
     IWitnessBuilder ConfigureLogging(Action<OpenTelemetryLoggerOptions> configure);
+    // Convenience: WithStandardInstrumentations(), WithOtlpExporter(), WithConsoleExporter(), etc.
 }
 ```
 
-Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrumentation()`, `WithHttpClientInstrumentation()`, `WithOtlpExporter()`, `WithConsoleExporter()`, `ClearLoggingProviders()`, `WithAzureMonitor()`. Escape hatches provide direct OTel SDK access—do not mix convenience and escape-hatch methods for the same instrumentation.
+Escape hatches provide direct OTel SDK access—do not mix convenience and escape-hatch methods for the same instrumentation.
 
 ---
 
@@ -125,20 +101,16 @@ Convenience methods: `WithStandardInstrumentations()`, `WithAspNetCoreInstrument
 
 ## Testing — `WitnessSharp.Testing`
 
+In-memory capture via `MeterListener`, `ActivityListener`, and logging backend. Includes assertion helpers: `AssertLogged()`, `AssertMetricRecorded()`, `AssertActivityStarted()`.
+
 ```csharp
 public sealed class TestWitness<T> : IWitness<T>
 {
     public IReadOnlyList<LoggedMessage> LoggedMessages { get; }
     public IReadOnlyList<RecordedMetric> RecordedMetrics { get; }
     public IReadOnlyList<StartedActivity> StartedActivities { get; }
-    
-    public Meter Meter { get; }
-    public ActivitySource ActivitySource { get; }
-    public ILogger<T> Logger { get; }
 }
 ```
-
-In-memory capture via `MeterListener`, `ActivityListener`, and compatible logging backend. Includes assertion helpers: `AssertLogged()`, `AssertMetricRecorded()`, `AssertActivityStarted()`.
 
 
 ---
@@ -173,14 +145,6 @@ Branch model: trunk-based on `main`, tag-driven releases.
 
 ---
 
-## Future-work register
-
-Deferred to post-v1:
-- **`WitnessedAction` extensibility**: Lifecycle events / observers
-- **Custom processors**: OTel filtering recipes or dedicated package
-- **SqlClient / EFCore instrumentation**: Sub-packages to avoid bloat
-
-
 ---
 
 ## Development methodology
@@ -189,17 +153,8 @@ Test-first (TDD): 100% code coverage, Stryker mutation testing (core/testing/Azu
 
 ---
 
-## v1 implementation sequence (rough ordering)
+## Post-v1 roadmap
 
-1. **Scaffolding** — monorepo layout, centralized package config, `.editorconfig`, MIT LICENSE, README skeleton, `build.yml`
-2. **Core types** — `IWitness`, `IWitness<T>`, `Witness<T>`, `IWitnessFactory`, `WitnessedAction`, extensions, tests
-3. **Setup API** — `WitnessOptions`, fluent builder, `AddWitness` overloads, resource attributes, integration tests
-4. **`WitnessSharp.Testing`** — `TestWitness<T>` and assertion helpers
-5. **`WitnessSharp.AzureMonitor`** — `.WithAzureMonitor(connStr)` extension, integration test
-6. **`WitnessSharp.Analyzers` (diagnostic)** — `WS0001` rule + code-fix
-7. **`WitnessSharp.Analyzers` (interceptor)** — source-generator for net9.0+/net10.0
-8. **AOT** — sample app `PublishAot=true`, fix warnings in our code
-9. **Sample app** — `samples/SampleWebApi` end-to-end with docker-compose
-10. **Docs** — flesh out README (quickstart, concepts, recipes, testing, AOT)
-11. **CI/CD** — `release.yml` for tag-driven NuGet publish
-12. **Release** — cut `0.1.0`
+- **`WitnessedAction` extensibility**: Lifecycle events / observers
+- **Custom processors**: OTel filtering recipes or dedicated package
+- **SqlClient / EFCore instrumentation**: Sub-packages to avoid bloat
