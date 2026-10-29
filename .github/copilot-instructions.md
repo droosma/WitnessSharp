@@ -94,10 +94,9 @@ Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp
 
 ### Deliberate design choices — do not "fix"
 
-- `WitnessedAction.Activity` is a public property (promoted from field). Keep it public.
-- `WitnessedAction.Finish()` exists alongside `Dispose()` by design — callers may stop without disposing.
-- `WitnessedAction` is a **pure primitive** in v1 — no lifecycle events (`OnSuccess`/`OnFailure`/etc.). Extensibility story deferred to post-v1.
-- `IWitness<T>` does NOT have `ForType<TNew>()`. Sub-creation is handled by injecting `IWitnessFactory` separately (clean SOLID separation).
+- `WitnessedAction.Activity` and `Finish()` method are public by design (callers may stop without disposing).
+- `WitnessedAction` has no lifecycle events (e.g., `OnSuccess`/`OnFailure`) in v1; deferred to post-v1.
+- `IWitness<T>` has no `ForType<TNew>()` method; use `IWitnessFactory` for runtime creation (clean SOLID separation).
 
 ### Setup API conventions
 
@@ -134,25 +133,13 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 - Version derived from git tags via MinVer/nbgv — no manual `<Version>` in csproj files.
 - SemVer starting at `0.1.0`.
 
-### No custom processors in v1
+### What was intentionally excluded from v1
 
-No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
+The following features from earlier iterations are not included:
+- Custom OTel processors (`SqlFilteringProcessor`, `HealthCheckFilteringProcessor`) — use `.ConfigureTracing()` / `.ConfigureMetrics()` instead
+- Hardcoded source/health-check filters — configure via escape hatches or README recipes
+- `ForType<TNew>()` on `IWitness<T>` — replaced by `IWitnessFactory` for cleaner separation
 
-### What was intentionally dropped from the reference implementation
+Consumers use OTel's native filtering escape hatches, and README recipes show common patterns. A complementary processor package may be added later if demand warrants it.
 
-These lived in the original `Taqa.OpenTelemetry` and are **not** ported into this package:
-- `SqlFilteringProcessor`, `HealthCheckFilteringProcessor` → README recipes instead.
-- Hardcoded source filters (`"Taqa.*"`, `"Azure.*"`).
-- Hardcoded health-check paths and SQL thresholds.
-- `implicit operator ResourceBuilder`.
-- `OpenTelemetryConfiguration` record (replaced by options + builder).
-- `ForType<TNew>()` on interface (replaced by `IWitnessFactory`).
-- `WitnessedAction` lifecycle events (deferred to post-v1).
 
-## Reference Implementation
-
-The original code being ported from lives at `D:\reference\Taqa\` (read-only). Key files:
-- `Taqa.OpenTelemetry\Monitor.cs` — original `Monitor<T>` interface (renamed to `Witness<T>` in this package).
-- `Taqa.OpenTelemetry\MonitoredAction.cs` — original `MonitoredAction` (renamed to `WitnessedAction`).
-- `Taqa.OpenTelemetry\OpenTelemetryConfiguration.cs` — old config (replaced by `WitnessOptions` + `IWitnessBuilder`).
-- `Taqa.OpenTelemetry\OpenTelemetryServiceCollectionExtensions.cs` — old DI entry point (replaced by `AddWitness`).
