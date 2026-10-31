@@ -33,7 +33,7 @@ public sealed class OrderService(IWitness<OrderService> witness)
 
 **`IWitness<T>`** bundles `ILogger<T>`, `Meter`, and `ActivitySource` into one injectable.
 
-**`WitnessedAction`** wraps an `Activity` created via `witness.StartAction("Name")`. Mark outcomes with `Dispose()`, `Failed(ex)`, or `Cancelled()`:
+**`WitnessedAction`** wraps an `Activity` from `witness.StartAction("Name")`. Mark outcomes with `Failed(ex)`, `Cancelled()`, or `Dispose()` (default success):
 
 ```csharp
 using var action = witness.StartAction("RetrieveSummary");
@@ -41,12 +41,7 @@ try { return await _controller.RetrieveSummaryAsync(); }
 catch (Exception ex) { action.Failed(ex); throw; }
 ```
 
-**Logging extension methods** on `IWitness<T>` are optimized on **net9.0+** via source-generator interceptor; on **net8.0**, use the `WS0001` analyzer's code-fix:
-
-```csharp
-public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId) =>
-    witness.Logger.LogInformation("Order {OrderId} placed", orderId);
-```
+**Logging extension methods** — write standard `ILogger` calls; **net9.0+** optimizes automatically via interceptor, **net8.0** uses the `WS0001` analyzer code-fix to eliminate allocations.
 
 ## Installation
 
@@ -59,7 +54,7 @@ dotnet add package WitnessSharp.Testing       # test projects
 
 ## Configuration
 
-Configure from `appsettings.json`:
+Configure via `appsettings.json` (binds to `WitnessOptions`):
 
 ```json
 {
@@ -74,18 +69,26 @@ Configure from `appsettings.json`:
 }
 ```
 
-Or use the fluent builder: `AddWitness(options => { ... }).WithStandardInstrumentations().WithOtlpExporter()` for direct OTel SDK access via `.ConfigureTracing(...)`, `.ConfigureMetrics(...)`, etc.
+Or use the fluent builder for direct OTel SDK access:
 
-## Recipes
+```csharp
+AddWitness(options => { ... })
+    .WithStandardInstrumentations()
+    .WithOtlpExporter()
+    .ConfigureTracing(...)
+    .ConfigureMetrics(...)
+```
 
-**Filtering traces**: Use `ConfigureTracing()` to customize. For example, exclude health checks:
+## Recipes & extras
+
+**Filter traces** via `ConfigureTracing()` — e.g., exclude health checks:
 
 ```csharp
 .ConfigureTracing(tracing => tracing.AddAspNetCoreInstrumentation(options =>
     options.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health")))
 ```
 
-**Azure Monitor**: Call `.WithAzureMonitor()` from `WitnessSharp.AzureMonitor`. The connection string is read from `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+**Azure Monitor**: `.WithAzureMonitor()` from `WitnessSharp.AzureMonitor` (reads `APPLICATIONINSIGHTS_CONNECTION_STRING`).
 
 ## Testing
 
@@ -102,13 +105,11 @@ witness.AssertMetricRecorded("orders");
 witness.AssertActivityStarted("PlaceOrder");
 ```
 
-## Analyzer (WS0001)
+## Analyzer & AOT
 
-`WitnessSharp.Analyzers` suggests `[LoggerMessage]` for templated logging in extension methods. See [WS0001 rule](docs/rules/WS0001.md) and [LoggerMessage docs](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator).
+`WitnessSharp.Analyzers` provides `WS0001` analyzer suggesting `[LoggerMessage]` for templated logging. See [WS0001 rule](docs/rules/WS0001.md).
 
-## AOT support
-
-WitnessSharp is AOT/trim-friendly. Upstream instrumentation and exporter packages may emit warnings when publishing with `PublishAot=true`.
+WitnessSharp is AOT/trim-friendly. Upstream instrumentation and exporter packages may emit warnings with `PublishAot=true`.
 
 ## Contributing
 
