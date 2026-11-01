@@ -137,19 +137,15 @@ Branch model: trunk-based on `main`, tag-driven releases.
 
 ---
 
-## Docs
-
-- **README.md**: quickstart, concepts, configuration, recipes, testing, AOT notes
-- **Per-package READMEs** on NuGet.org
-- **OSS housekeeping**: LICENSE, CODE_OF_CONDUCT.md, CONTRIBUTING.md, templates
-
----
-
----
-
 ## Development methodology
 
 Test-first (TDD): 100% code coverage, Stryker mutation testing (core/testing/AzureMonitor), all tests green. DDD/hexagonal applied where warranted. AOT warnings from our code fail CI.
+
+---
+
+## Documentation
+
+README.md (quickstart, concepts, config, recipes, testing), per-package READMEs on NuGet.org, and standard OSS files (LICENSE, CONTRIBUTING, CONDUCT, etc.).
 
 ---
 
