@@ -40,25 +40,16 @@ All production code is written test-first. The workflow is:
 2. Write the minimal production code to make it pass.
 3. Refactor while keeping tests green.
 
-### Quality Gates — enforced before moving to any next step
+### Quality Gates
 
-- **100% code coverage** — of code in this repo. Validated via coverage tooling. No new code is considered complete until coverage is verified at 100%.
-- **Mutation testing (Stryker)** — run after tests pass on core/testing/AzureMonitor packages. Surviving mutants must be addressed before moving on. This ensures tests validate behavior, not just execute lines.
-- **Analyzer package**: the Roslyn test harness inherently validates behavior (assertions are "this code produces diagnostic X at location Y"). Stryker is not required here — the harness already guarantees behavioral testing.
-- **All tests green** — no skipped or ignored tests left behind.
+- **100% code coverage**: Validated via coverage tooling before declaring work complete.
+- **Mutation testing (Stryker)**: Run on core/testing/AzureMonitor packages; address surviving mutants.
+- **Analyzer package**: Roslyn test harness validates behavior (assertions confirm diagnostic at location). Stryker not required — harness guarantees behavioral testing.
+- **All tests green**: No skipped or ignored tests.
 
-### DDD (Domain-Driven Design)
+### DDD & Hexagonal Architecture
 
-Apply DDD where the domain warrants it. In this package the core domain is the observability primitives (`IWitness<T>`, `WitnessedAction`, `WitnessedOutcome`). Keep domain logic free of infrastructure concerns.
-
-### Hexagonal Architecture
-
-Use ports-and-adapters separation where called for:
-- **Core/domain** — pure abstractions and logic (`IWitness<T>`, `WitnessedAction`, options).
-- **Ports** — interfaces defining what the core needs (e.g., `IWitnessBuilder` as a configuration port).
-- **Adapters** — implementations wiring to infrastructure (OTel SDK, Azure Monitor, DI registration).
-
-The separate packages naturally enforce this: `WitnessSharp` is the core, `WitnessSharp.AzureMonitor` is an adapter.
+Apply DDD where warranted (core domain: `IWitness<T>`, `WitnessedAction`, `WitnessedOutcome`); use ports-and-adapters for infrastructure separation. Core/domain (`IWitness<T>`, options) remain pure; ports define interfaces (`IWitnessBuilder`); adapters wire OTel SDK, Azure Monitor, DI. `WitnessSharp` is core, `WitnessSharp.AzureMonitor` is adapter.
 
 ## Architecture
 
@@ -94,22 +85,22 @@ Naming convention: types drop the `Sharp` suffix (following RestSharp / CefSharp
 
 ### Deliberate design choices — do not "fix"
 
-- `WitnessedAction.Activity` is a public property (promoted from field). Keep it public.
+- `WitnessedAction.Activity` is public (by design; promoted from field).
 - `WitnessedAction.Finish()` exists alongside `Dispose()` by design — callers may stop without disposing.
-- `WitnessedAction` is a **pure primitive** in v1 — no lifecycle events (`OnSuccess`/`OnFailure`/etc.). Extensibility story deferred to post-v1.
-- `IWitness<T>` does NOT have `ForType<TNew>()`. Sub-creation is handled by injecting `IWitnessFactory` separately (clean SOLID separation).
+- `WitnessedAction` is a pure primitive in v1 — no lifecycle events. Extensibility deferred to post-v1.
+- `IWitness<T>` has no `ForType<TNew>()`. Inject `IWitnessFactory` for runtime creation (SOLID separation).
 
 ### Setup API conventions
 
 - `AddWitness()` is the entry point (not `UseOpenTelemetry`).
-- Registration alone (no `.With*` calls) is valid — gives DI primitives + resource attributes only.
-- Behavior toggles (instrumentations, exporters) live on the fluent builder, not in options.
+- Registration alone is valid — no `.With*` calls needed for DI primitives + resource attributes.
+- Behavior toggles live on the fluent builder, not in options.
 - Config section: `Witness` in `appsettings.json`.
 - `ClearProviders()` is off by default; consumers opt in via `.ClearLoggingProviders()`.
 
 ### Logging pattern & interceptor-based optimization
 
-The package promotes extension methods on `IWitness<T>` where consumers write natural `ILogger` calls:
+The package promotes extension methods on `IWitness<T>` where consumers write natural `ILogger` calls. On **net9.0+/net10.0**, a source-generator interceptor transparently rewrites these to `[LoggerMessage]`-equivalent allocation-free code at compile time. On **net8.0**, the `WS0001` analyzer + code-fix offers manual optimization. This interceptor is **v1 scope** — core to the package's value proposition.
 
 ```csharp
 public static void LogOrderPlaced(this IWitness<OrderService> witness, int orderId)
@@ -118,15 +109,9 @@ public static void LogOrderPlaced(this IWitness<OrderService> witness, int order
 }
 ```
 
-On **net9.0+/net10.0**: a source-generator interceptor transparently rewrites these calls to `[LoggerMessage]`-equivalent allocation-free code at compile time. The consumer never writes or sees `[LoggerMessage]` attributes.
-
-On **net8.0**: standard `ILogger` behavior (no interception). The `WS0001` analyzer + code-fix offers manual optimization.
-
-This interceptor is **v1 scope** — it's core to the package's value proposition.
-
 ### AOT
 
-Full AOT/trimming support is a v1 commitment for **this package's code**. Annotate unavoidable reflection with `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. CI publishes the sample app with `PublishAot=true` and treats warnings from *our code* as errors. Upstream OTel warnings are documented but don't fail CI.
+Full AOT/trimming support is a v1 commitment. Annotate unavoidable reflection with `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`. CI publishes the sample app with `PublishAot=true` and treats warnings from our code as errors (upstream OTel warnings are documented but don't fail CI).
 
 ### Versioning
 
@@ -136,7 +121,7 @@ Full AOT/trimming support is a v1 commitment for **this package's code**. Annota
 
 ### No custom processors in v1
 
-No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via the escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns. A complementary package may be added later if demand warrants it.
+No `SqlFilteringProcessor`, `HealthCheckFilteringProcessor`, or any custom OTel processors. Consumers use OTel's native filtering via escape hatches (`.ConfigureTracing(...)`, `.ConfigureMetrics(...)`). README recipes show common patterns; complementary packages may be added post-v1 if demand warrants.
 
 ### What was intentionally dropped from the reference implementation
 
